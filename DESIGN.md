@@ -1,80 +1,85 @@
 ---
 name: anyview-idle
-description: 极简瑞士奶油风格待机刷课控制台；扁平、视觉优先、少文字、温润克制
+description: 「无事」夜色待机控制台；扁平、少字、一眼读状态
 colors:
-  cream-canvas: "#FAF7F2"
-  cream-card: "#FCFAF7"
-  cream-sub: "#F4EDE3"
-  hairline: "#E6DDD0"
-  espresso: "#201B17"
-  slate-brown: "#635C54"
-  caption: "#9C9388"
-  terracotta: "#C85A32"
-  sage-green: "#4A6B53"
-  amber: "#C4883B"
-  error-rose: "#C93B2B"
+  ink: "#141310"
+  paper: "#EAE5DA"
+  gray: "#A29B8B"
+  hairline: "#2E2B25"
+  cinnabar: "#D2604A"
 typography:
   display:
     fontFamily: "Fragment Mono, ui-monospace, Menlo, Consolas, monospace"
-    fontSize: "clamp(3.5rem, 8vw, 5.5rem)"
+    fontSize: "clamp(4.5rem, 18vw, 7rem)"
     fontWeight: 500
-    lineHeight: 1.1
-    letterSpacing: "-0.02em"
-  headline:
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, 'PingFang SC', sans-serif"
-    fontSize: "22px"
-    fontWeight: 600
-    lineHeight: 1.3
-  body:
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, 'PingFang SC', sans-serif"
-    fontSize: "14px"
+    lineHeight: 0.88
+    letterSpacing: "-0.04em"
+  summary:
+    fontFamily: "Fragment Mono, ui-monospace, monospace"
+    fontSize: "clamp(2.5rem, 10vw, 4rem)"
+    fontWeight: 500
+  target:
+    fontFamily: "Fragment Mono, ui-monospace, monospace"
+    fontSize: "clamp(1.25rem, 4vw, 1.75rem)"
     fontWeight: 400
-    lineHeight: 1.6
+  gap:
+    fontFamily: "Fragment Mono, ui-monospace, monospace"
+    fontSize: "1.5rem"
+  body:
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+    fontSize: "15px"
+    fontWeight: 400
+    lineHeight: 1.5
+  small:
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+    fontSize: "14px"
+  caption:
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+    fontSize: "13px"
+  log:
+    fontFamily: "Fragment Mono, ui-monospace, monospace"
+    fontSize: "12px"
   tabular:
     fontFamily: "Fragment Mono, ui-monospace, monospace"
-    fontSize: "14px"
+    fontSize: "16px"
     fontWeight: 500
     fontVariantNumeric: "tabular-nums"
 rounded:
-  sm: "6px"
-  md: "10px"
-  lg: "16px"
-  full: "9999px"
+  none: "0"
 ---
 
-# Design System: anyview-idle (Minimalist Swiss Cream)
+# Design System: anyview-idle（无事）
 
-## 1. Creative North Star: 极简瑞士奶油风 (Swiss Cream Minimalist)
-- **视觉优先 (Visual-First)**: 告别生硬冗长的文字说教与黑底单调极简。使用优雅的圆环进度仪表、双端点滑轨、状态胶囊与指标卡片，一眼捕获全站运行态。
-- **少文字 (Concise & Self-Explanatory)**: 控件自解释，移除大段说明，通过直观的视觉交互（如双端点区间滑动条、标签切片、数值徽章）完成操作。
-- **温润扁平 (Warm & Flat)**: 摒弃俗气的发光和粗劣阴影，采用温暖细腻的奶油纸面色底（`#FAF7F2`）搭配温润深咖啡字（`#201B17`）与陶土朱砂点缀（`#C85A32`），呈现国际主义排版（Swiss Style）的秩序与克制美感。
-- **极速流畅 (Butter-Smooth 60fps)**: 消除一切 DOM 抖动、全量重建与轮询重绘瓶颈，滑动条采用硬件加速指针捕获，日志采用增量滚动缓冲区。
+## 1. Creative North Star
 
-## 2. 颜色系统 (Color System)
-- **Cream Canvas `#FAF7F2`**: 温暖柔和的奶油底色，夜间或长时挂机温和护眼，告别生硬死白与压抑纯黑。
-- **Cream Card `#FCFAF7` / `#FFFFFF`**: 高透气度卡片底色，搭配 1px 发丝边界 `#E6DDD0`。
-- **Tonal Sub `#F4EDE3`**: 滑轨未选区间、次级按钮底色、标签填充。
-- **Primary Espresso `#201B17`**: 深度炭咖色主文字，沉稳锐利。
-- **Secondary Slate Brown `#635C54`**: 次级说明、图例文本。
-- **Terracotta Accent `#C85A32`**: 陶土朱砂，用于双端点滑轨激活线段、主控按钮与关键进度。
-- **Sage Green `#4A6B53`**: 运行中呼吸点与正常完成状态。
-- **Soft Amber `#C4883B`**: 换题间隙、等待状态。
-- **Error Rose `#C93B2B`**: 错误回显与警示。
+工具在工作时应当看起来像什么都没发生。页面只给出当前这一刻：登录、配置、运行、小结，同一栏，不用卡片堆叠。夜间书桌、余光扫一眼——呼吸点说是否在跑，巨大分钟数字说挂到哪了。
 
-## 3. 设计小巧思: 双端点时长滑动条 (Dual-Endpoint Range Slider)
-- 一条纤细平整的导轨，其上分布两枚圆形端点（下限 & 上限）。
-- 左右端点拖拽时，两端点之间的区间以陶土暖色高亮贯通，实时计算并显示浮动分值（例如 `5.0m - 10.0m`）。
-- 支持指针事件捕捉（Desktop Mouse + Touch），点击轨道任意位置自动吸附移动最近端点。
-- 智能防重叠保护（下限不得超过上限，且自动保留最小安全步长）。
-- 辅以快捷预设 Pill（`[3-6m]`, `[5-10m 常用]`, `[10-20m]`, `[15-30m]`），点击即刻平滑同步。
+- **无事**: 没有卡片、没有圆角、没有阴影、没有发光。分组靠留白和发丝线。
+- **一眼**: 运行态的主角是等宽大数字，旁边是安静的目标值。
+- **少字**: 控件自带标签；说明只留两行产品约束。
+- **朱砂只用一次**: `#D2604A` 只给运行中的呼吸点和错误，其余是墨底纸色。
 
-## 4. 视觉优先运行仪表 (Live Visual Execution Monitor)
-- **进度圆环 (Circular Dial)**: 优雅的 SVG 双色圆环，实时动态展示当前题目耗时比例。
-- **等宽大计时 (Tabular Tab)**: 毫秒级防抖动等宽数字，优雅律动。
-- **4 联指标看板 (Quad Metrics Grid)**:
-  - 已完成 (Done)
-  - 自动跳过 (Skipped)
-  - 模拟错误注入 (Errors)
-  - 累计增涨时长 (Time Gained)
-- **轻量夜录 (Audit Stream)**:
-  - 增量追加，滚动自适应，支持一键清空与复制，彻底杜绝掉帧卡顿。
+## 2. 颜色
+
+- **Ink `#141310`**: 画布。夜色，长时挂机不刺眼。
+- **Paper `#EAE5DA`**: 主文字、主按钮底、完成态圆点。
+- **Gray `#A29B8B`**: 标签、提示、空闲圆点描边。
+- **Hairline `#2E2B25`**: 下划线与发丝边。
+- **Cinnabar `#D2604A`**: 运行呼吸点、出错字。
+
+## 3. 签名交互
+
+- **呼吸点**: 顶栏 8px 圆点。空心 = 空闲/未登录；朱砂缓呼吸（6s）= 运行中；实心纸色 = 本轮完成。`prefers-reduced-motion` 时不呼吸。
+- **大数字**: Fragment Mono 等宽分钟值，`→ 目标` 紧随其后。换题间隙数字静为破折号。
+- **下划线输入**: 学号/密码/区间都是一条发丝线，焦点时线变纸色。
+
+## 4. 四态
+
+1. **登录**: 学号、密码；token / XFF 折在 details 里。
+2. **配置**: 课程、每题时长、错误注入、题号。两行约束说明。开始。
+3. **运行**: 题名一行、大数字、一行盘点、停止（当前题挂完即停）。
+4. **小结**: 本轮涨幅与盘点，返回配置。夜录仍在页脚。
+
+## 5. 夜录
+
+页脚 `夜录 · N 行`，默认折叠。打开后可复制。增量追加，不重绘整页。

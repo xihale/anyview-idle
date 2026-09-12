@@ -3,9 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#FAF7F2">
+<meta name="theme-color" content="#141310">
+<meta name="color-scheme" content="dark">
 <title>anyview-idle</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%23FAF7F2'/%3E%3Ccircle cx='8' cy='8' r='4' fill='%23C85A32'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23141310'/%3E%3Ccircle cx='8' cy='8' r='3' fill='%23D2604A'/%3E%3C/svg%3E">
+<script>
+  try {
+    if (localStorage.getItem("anyview_token")) {
+      document.documentElement.dataset.boot = "cfg";
+    }
+  } catch (e) {}
+</script>
 <style>
   @font-face {
     font-family: "Fragment Mono";
@@ -15,1029 +23,734 @@
   }
 
   :root {
-    color-scheme: light;
-    --canvas: #FAF7F2;
-    --surface: #FFFFFF;
-    --surface-sub: #F4EDE3;
-    --surface-hover: #ECE3D7;
-    --hairline: #E8DFD3;
-    --hairline-dark: #D4C9BC;
-    --espresso: #201B17;
-    --slate: #635C54;
-    --caption: #9C9388;
-    --terracotta: #C85A32;
-    --terracotta-soft: rgba(200, 90, 50, 0.10);
-    --terracotta-hover: #B54D28;
-    --sage: #4A6B53;
-    --sage-soft: rgba(74, 107, 83, 0.12);
-    --amber: #C4883B;
-    --amber-soft: rgba(196, 136, 59, 0.12);
-    --red: #C93B2B;
-    --red-soft: rgba(201, 59, 43, 0.10);
-    --radius-sm: 6px;
-    --radius-md: 10px;
-    --radius-lg: 14px;
-    --radius-full: 9999px;
+    color-scheme: dark;
+    --ink: #141310;
+    --paper: #EAE5DA;
+    --gray: #A29B8B;
+    --hairline: #2E2B25;
+    --cinnabar: #D2604A;
     --font-mono: "Fragment Mono", ui-monospace, Menlo, Consolas, monospace;
     --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   }
 
-  *, *::before, *::after {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body { min-height: 100%; }
 
   body {
-    min-height: 100vh;
-    background-color: var(--canvas);
-    color: var(--espresso);
+    min-height: 100dvh;
+    background: var(--ink);
+    color: var(--paper);
     font-family: var(--font-sans);
-    font-size: 14px;
+    font-size: 15px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
-    text-rendering: optimizeLegibility;
     display: flex;
     flex-direction: column;
-    padding: 0 16px 40px;
+    padding: 0 28px 28px;
   }
 
-  ::selection {
-    background: var(--terracotta);
-    color: #FFFFFF;
+  ::selection { background: var(--paper); color: var(--ink); }
+  input, textarea { caret-color: var(--paper); }
+
+  .skip {
+    position: absolute;
+    left: -999px;
+    top: 8px;
+    background: var(--paper);
+    color: var(--ink);
+    padding: 8px 12px;
+    z-index: 20;
   }
+  .skip:focus { left: 8px; }
 
   .tnum {
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum" 1;
+    font-family: var(--font-mono);
   }
 
-  .app-container {
-    max-width: 620px;
-    width: 100%;
-    margin: 0 auto;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-  }
-
-  /* 顶栏 */
-  header.topbar {
+  header.top {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 20px 2px 16px;
-    border-bottom: 1px solid var(--hairline);
-    margin-bottom: 20px;
+    align-items: baseline;
+    gap: 16px;
+    padding: 28px 0 0;
+    max-width: 640px;
+    width: 100%;
+    margin: 0 auto;
+    flex-shrink: 0;
   }
-
-  .brand-name {
+  .brand {
     font-family: var(--font-mono);
-    font-size: 16px;
-    font-weight: 600;
+    font-size: 13px;
     letter-spacing: -0.02em;
-    color: var(--espresso);
+    color: var(--paper);
   }
-
-  .header-actions {
+  .header-meta {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     gap: 10px;
+    color: var(--gray);
+    font-size: 13px;
+    min-width: 0;
   }
-
-  .status-pill {
+  .who-btn {
+    border: 0;
+    background: none;
+    color: var(--gray);
+    font: inherit;
+    cursor: pointer;
+    padding: 0;
+    max-width: 12em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .who-btn:hover { color: var(--paper); }
+  .who-btn[hidden] { display: none; }
+  .state {
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    padding: 4px 12px;
-    border-radius: var(--radius-full);
-    border: 1px solid var(--hairline);
-    background: var(--surface);
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--slate);
-    transition: all 0.2s ease;
+    color: var(--gray);
+    white-space: nowrap;
   }
-  .status-pill .dot {
-    width: 7px;
-    height: 7px;
+  .state .dot {
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
-    background: var(--caption);
+    border: 1px solid var(--gray);
+    background: transparent;
     flex-shrink: 0;
   }
-  .status-pill.running {
-    border-color: rgba(74, 107, 83, 0.3);
-    background: var(--sage-soft);
-    color: var(--sage);
+  .state.running { color: var(--paper); }
+  .state.running .dot {
+    border-color: var(--cinnabar);
+    background: var(--cinnabar);
+    animation: breath 6s ease-in-out infinite;
   }
-  .status-pill.running .dot {
-    background: var(--sage);
-    box-shadow: 0 0 0 3px rgba(74, 107, 83, 0.2);
-    animation: calm-pulse 2.4s ease-in-out infinite;
+  .state.error { color: var(--cinnabar); }
+  .state.error .dot {
+    border-color: var(--cinnabar);
+    background: var(--cinnabar);
   }
-  .status-pill.waiting {
-    border-color: rgba(196, 136, 59, 0.3);
-    background: var(--amber-soft);
-    color: var(--amber);
-  }
-  .status-pill.waiting .dot {
-    background: var(--amber);
-  }
-  .status-pill.error {
-    border-color: rgba(201, 59, 43, 0.3);
-    background: var(--red-soft);
-    color: var(--red);
-  }
-  .status-pill.error .dot {
-    background: var(--red);
+  .state.done { color: var(--paper); }
+  .state.done .dot {
+    border-color: var(--paper);
+    background: var(--paper);
   }
 
-  @keyframes calm-pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.45; transform: scale(0.92); }
+  @keyframes breath {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.32; }
   }
 
-  .user-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 10px;
-    border-radius: var(--radius-full);
-    background: var(--surface-sub);
-    font-size: 12px;
-    color: var(--espresso);
-    font-weight: 500;
+  .banner {
+    max-width: 640px;
+    width: 100%;
+    margin: 20px auto 0;
+    color: var(--cinnabar);
+    font-size: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px 16px;
   }
-  .user-badge button.logout-btn {
-    border: none;
-    background: transparent;
-    color: var(--caption);
+  .banner[hidden] { display: none !important; }
+  .banner .msg { min-width: 0; }
+  .text-btn {
+    border: 0;
+    background: none;
+    color: var(--gray);
+    font: inherit;
+    font-size: 13px;
     cursor: pointer;
-    padding: 0 2px;
-    font-size: 11px;
+    padding: 0;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-color: var(--hairline);
+  }
+  .text-btn:hover { color: var(--paper); text-decoration-color: var(--paper); }
+
+  main {
+    flex: 1;
     display: flex;
     align-items: center;
-  }
-  .user-badge button.logout-btn:hover {
-    color: var(--terracotta);
-  }
-
-  /* 视图切换 */
-  .stage-view {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    animation: fade-enter 0.15s ease-out;
-  }
-  .stage-view[hidden] {
-    display: none !important;
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 48px 0 32px;
   }
 
-  @keyframes fade-enter {
-    from {
-      opacity: 0;
-      transform: translateY(2px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
+  .stage { width: 100%; display: flex; flex-direction: column; gap: 28px; }
+  .stage[hidden] { display: none !important; }
 
-  /* 瑞士极简卡片 */
-  .swiss-card {
-    background: var(--surface);
-    border: 1px solid var(--hairline);
-    border-radius: var(--radius-lg);
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
+  html[data-boot="cfg"] #viewLogin { display: none !important; }
+  html[data-boot="cfg"] #viewCfg { display: flex !important; }
 
-  .card-header {
-    display: flex;
-    justify-content: space-between;
+  .row {
+    display: grid;
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+    gap: 10px 18px;
     align-items: baseline;
   }
-  .card-title {
+  .row.multi { align-items: center; }
+  .lbl {
+    color: var(--gray);
     font-size: 13px;
-    font-weight: 600;
-    color: var(--espresso);
+    line-height: 1.4;
   }
+  .grow { min-width: 0; }
 
-  /* 手动数字输入与范围徽章 */
-  .range-inputs-group {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    background: var(--surface-sub);
-    padding: 3px 8px;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--hairline);
+  .pair {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
   }
-  .range-prefix, .range-sep {
-    font-size: 12px;
-    color: var(--caption);
-    font-weight: 500;
-  }
-  .range-unit {
-    font-size: 12px;
-    color: var(--slate);
-    font-weight: 500;
-  }
-  .range-total-badge {
+  .pair .sep { color: var(--gray); }
+  .pair .unit { color: var(--gray); font-size: 13px; flex-shrink: 0; }
+
+  input.uline,
+  select.uline {
+    width: 100%;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--hairline);
+    border-radius: 0;
+    color: var(--paper);
     font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--slate);
-    background: var(--surface-sub);
-    border: 1px solid var(--hairline);
-    padding: 2px 8px;
-    border-radius: var(--radius-full);
-  }
-  .range-num-input {
-    width: 52px;
-    padding: 3px 2px;
-    background: var(--surface);
-    border: 1px solid var(--hairline);
-    border-radius: var(--radius-sm);
-    font-family: var(--font-mono);
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--espresso);
-    text-align: center;
+    font-size: 16px;
+    line-height: 1.6;
+    padding: 4px 0 6px;
     outline: none;
-    transition: all 0.15s ease;
-    -moz-appearance: textfield;
+    appearance: none;
+    -webkit-appearance: none;
   }
-  .range-num-input::-webkit-outer-spin-button,
-  .range-num-input::-webkit-inner-spin-button {
+  select.uline {
+    font-family: var(--font-sans);
+    font-size: 15px;
+    padding-right: 22px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23A29B8B' stroke-width='1.5'><path d='M2 4l4 4 4-4'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 0 center;
+    cursor: pointer;
+  }
+  input.uline.num {
+    width: 4.2em;
+    text-align: center;
+    font-family: var(--font-sans);
+    font-variant-numeric: tabular-nums;
+  }
+  input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
     -webkit-appearance: none;
     margin: 0;
   }
-  .range-num-input:focus {
-    border-color: var(--terracotta);
-    box-shadow: 0 0 0 2px var(--terracotta-soft);
-    color: var(--terracotta);
-    background: #FFFFFF;
+  input.uline:focus,
+  select.uline:focus {
+    border-bottom-color: var(--paper);
   }
-
-  /* 双端点滑轨 */
-  .dual-slider-container {
-    position: relative;
-    height: 36px;
-    display: flex;
-    align-items: center;
-    user-select: none;
-    touch-action: none;
-    cursor: pointer;
-    padding: 0 4px;
-  }
-
-  .dual-slider-track {
-    position: absolute;
-    left: 0;
-    right: 0;
-    height: 6px;
-    background: var(--surface-sub);
-    border-radius: var(--radius-full);
-    overflow: hidden;
-  }
-
-  .dual-slider-range {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    background: var(--terracotta);
-    border-radius: var(--radius-full);
-    pointer-events: none;
-  }
-
-  .slider-handle {
-    position: absolute;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    width: 22px;
-    height: 22px;
-    background: var(--surface);
-    border: 2.5px solid var(--terracotta);
-    border-radius: 50%;
-    cursor: grab;
-    z-index: 2;
-    box-shadow: 0 1px 4px rgba(32, 27, 23, 0.12);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.1s ease, box-shadow 0.1s ease;
-  }
-  .slider-handle::after {
-    content: "";
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--terracotta);
-  }
-  .slider-handle:hover {
-    transform: translate(-50%, -50%) scale(1.12);
-    box-shadow: 0 2px 8px rgba(200, 90, 50, 0.25);
-  }
-  .slider-handle:active {
-    cursor: grabbing;
-    transform: translate(-50%, -50%) scale(1.18);
-  }
-  .slider-handle:focus-visible {
-    outline: 2px solid var(--espresso);
-    outline-offset: 2px;
-  }
-
-  .slider-scale-row {
-    display: flex;
-    justify-content: space-between;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--caption);
-    padding: 0 2px;
-  }
-
-
-  /* 表单与输入 */
-  .select-row {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  }
-  .select-wrapper {
-    position: relative;
-    flex: 1;
-  }
-  select.swiss-select {
-    width: 100%;
-    appearance: none;
-    -webkit-appearance: none;
-    padding: 10px 36px 10px 14px;
-    background: var(--surface);
-    border: 1px solid var(--hairline);
-    border-radius: var(--radius-md);
-    font-family: inherit;
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--espresso);
-    outline: none;
-    cursor: pointer;
-    transition: border-color 0.15s ease;
-  }
-  select.swiss-select:focus {
-    border-color: var(--espresso);
-  }
-  .select-arrow {
-    position: absolute;
-    right: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    pointer-events: none;
-    color: var(--slate);
-  }
-
-  .input-field {
-    width: 100%;
-    padding: 10px 14px;
-    background: var(--surface);
-    border: 1px solid var(--hairline);
-    border-radius: var(--radius-md);
-    font-family: inherit;
-    font-size: 14px;
-    color: var(--espresso);
-    outline: none;
-    transition: border-color 0.15s ease;
-  }
-  .input-field:focus {
-    border-color: var(--espresso);
-  }
-  .input-field::placeholder {
-    color: var(--caption);
-  }
-
-  .btn-primary {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 12px 24px;
-    background: var(--terracotta);
-    color: #FFFFFF;
-    border: none;
-    border-radius: var(--radius-md);
-    font-family: inherit;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-  .btn-primary:hover:not(:disabled) {
-    background: var(--terracotta-hover);
-  }
-  .btn-primary:active:not(:disabled) {
-    transform: scale(0.99);
-  }
-  .btn-primary:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
-
-  .btn-secondary {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 8px 14px;
-    background: var(--surface-sub);
-    color: var(--espresso);
-    border: 1px solid var(--hairline);
-    border-radius: var(--radius-md);
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-  .btn-secondary:hover:not(:disabled) {
-    background: var(--surface-hover);
-  }
-
-  .btn-stop {
-    background: var(--surface);
-    border: 1.5px solid var(--red);
-    color: var(--red);
-    border-radius: var(--radius-md);
-    padding: 10px 20px;
-    font-weight: 600;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    transition: all 0.15s ease;
-  }
-  .btn-stop:hover:not(:disabled) {
-    background: var(--red-soft);
-  }
-
-  /* 登录卡片 */
-  .login-card {
-    max-width: 400px;
-    margin: 40px auto 0;
-    width: 100%;
-  }
-  .login-tabs {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4px;
-    background: var(--surface-sub);
-    padding: 4px;
-    border-radius: var(--radius-md);
-    margin-bottom: 6px;
-  }
-  .tab-btn {
-    padding: 8px 14px;
-    border: none;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--slate);
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-  .tab-btn.active {
-    background: var(--surface);
-    color: var(--espresso);
-    font-weight: 600;
-  }
-
-  /* 运行态仪表 */
-  .question-badge-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  .chap-pill {
-    padding: 2px 8px;
-    background: var(--surface-sub);
-    border-radius: var(--radius-full);
-    font-size: 12px;
-    color: var(--slate);
-  }
-  .eid-pill {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--caption);
-  }
-
-  .question-title {
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--espresso);
-  }
-
-  .gauge-box {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 20px;
-    background: var(--canvas);
-    border: 1px solid var(--hairline);
-    border-radius: var(--radius-lg);
-    padding: 18px 22px;
-  }
-
-  .dial-wrapper {
-    position: relative;
-    width: 88px;
-    height: 88px;
-    flex-shrink: 0;
-  }
-  .dial-svg {
-    width: 88px;
-    height: 88px;
-    display: block;
-    overflow: visible;
-  }
-  .dial-track {
-    fill: transparent;
-    stroke: var(--surface-sub);
-    stroke-width: 8;
-  }
-  .dial-bar {
-    fill: transparent;
-    stroke: var(--terracotta);
-    stroke-width: 8;
-    stroke-linecap: round;
-    stroke-dasharray: 238.76;
-    stroke-dashoffset: 238.76;
-    transition: stroke-dashoffset 0.3s ease, opacity 0.2s ease;
-  }
-  .dial-center-text {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    pointer-events: none;
-  }
-  .dial-pct {
-    font-family: var(--font-mono);
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--espresso);
-  }
-
-  .time-stat-col {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-  }
-  .time-huge {
-    font-family: var(--font-mono);
-    font-size: clamp(32px, 6vw, 42px);
-    font-weight: 600;
-    color: var(--espresso);
-    line-height: 1;
-    letter-spacing: -0.02em;
-  }
-  .time-target-sub {
-    font-size: 13px;
-    color: var(--slate);
-    margin-top: 6px;
+  input.uline::placeholder { color: var(--gray); opacity: 0.7; }
+  .course-wrap {
     display: flex;
     align-items: baseline;
-    gap: 6px;
+    gap: 14px;
+    min-width: 0;
   }
-  .time-target-sub strong {
-    color: var(--terracotta);
-    font-family: var(--font-mono);
-  }
+  .course-wrap select { flex: 1; min-width: 0; }
 
-  /* 4联指标 */
-  .metrics-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
+  .adv {
+    color: var(--gray);
+    font-size: 13px;
   }
-  .metric-cell {
-    background: var(--surface);
-    border: 1px solid var(--hairline);
-    border-radius: var(--radius-md);
-    padding: 12px 14px;
+  .adv summary {
+    cursor: pointer;
+    list-style: none;
+    width: fit-content;
+    color: var(--gray);
+  }
+  .adv summary::-webkit-details-marker { display: none; }
+  .adv summary:hover { color: var(--paper); }
+  .adv .stack {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-  }
-  .metric-title {
-    font-size: 11px;
-    color: var(--caption);
-  }
-  .metric-num {
-    font-family: var(--font-mono);
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--espresso);
-  }
-  .metric-num.highlight {
-    color: var(--terracotta);
+    gap: 16px;
+    margin-top: 16px;
   }
 
-  /* 运行态日志 (首页不显示) */
-  details.log-card {
-    background: var(--surface);
-    border: 1px solid var(--hairline);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-  }
-  summary.log-header {
+  .hints {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 14px 18px;
-    cursor: pointer;
-    user-select: none;
+    flex-direction: column;
+    gap: 8px;
+    max-width: 38em;
+    color: var(--gray);
     font-size: 13px;
-    font-weight: 600;
-    color: var(--slate);
-    list-style: none;
-  }
-  summary.log-header::-webkit-details-marker {
-    display: none;
-  }
-  summary.log-header:hover {
-    color: var(--espresso);
+    line-height: 1.65;
   }
 
-  .log-action-btn {
-    padding: 2px 8px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--hairline);
-    background: transparent;
-    font-size: 11px;
-    color: var(--caption);
+  .empty-note {
+    color: var(--gray);
+    font-size: 14px;
+  }
+  .empty-note[hidden] { display: none !important; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    min-width: 96px;
+    padding: 0 22px;
+    border: 1px solid var(--paper);
+    background: var(--paper);
+    color: var(--ink);
+    font: inherit;
+    font-size: 14px;
+    letter-spacing: 0.08em;
     cursor: pointer;
+    width: fit-content;
   }
-  .log-action-btn:hover {
-    color: var(--espresso);
-    border-color: var(--espresso);
+  .btn:hover:not(:disabled) { filter: brightness(1.06); }
+  .btn:active:not(:disabled) { transform: translateY(1px); }
+  .btn:disabled { opacity: 0.38; cursor: not-allowed; }
+  .btn-ghost {
+    background: transparent;
+    color: var(--paper);
+    border-color: var(--hairline);
+    letter-spacing: 0.16em;
+  }
+  .btn-ghost:hover:not(:disabled) {
+    filter: none;
+    border-color: var(--paper);
+  }
+  .btn:focus-visible,
+  .text-btn:focus-visible,
+  .who-btn:focus-visible,
+  summary:focus-visible {
+    outline: 1px solid var(--paper);
+    outline-offset: 3px;
   }
 
+  .qmeta {
+    color: var(--gray);
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .qmeta strong {
+    color: var(--paper);
+    font-weight: 500;
+  }
+
+  .clock {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .clock .now {
+    font-family: var(--font-mono);
+    font-size: clamp(4.5rem, 18vw, 7rem);
+    font-weight: 500;
+    letter-spacing: -0.04em;
+    line-height: 0.88;
+    font-variant-numeric: tabular-nums;
+    color: var(--paper);
+  }
+  .clock .now .dot {
+    letter-spacing: 0;
+    margin: 0 -0.18em;
+  }
+  .clock .to {
+    color: var(--gray);
+    font-size: clamp(1.25rem, 4vw, 1.75rem);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+  .clock.is-gap .now {
+    font-size: 1.5rem;
+    letter-spacing: 0.35em;
+    color: var(--gray);
+    line-height: 1;
+  }
+
+  .tally {
+    color: var(--gray);
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+  .tally b {
+    color: var(--paper);
+    font-weight: 500;
+  }
+
+  .stop-hint {
+    color: var(--gray);
+    font-size: 13px;
+    margin-top: 10px;
+  }
+  .stop-hint[hidden] { display: none !important; }
+
+  .done-lead {
+    font-family: var(--font-mono);
+    font-size: clamp(2.5rem, 10vw, 4rem);
+    font-weight: 500;
+    letter-spacing: -0.04em;
+    line-height: 0.95;
+    font-variant-numeric: tabular-nums;
+  }
+  .done-lead .dot { letter-spacing: 0; margin: 0 -0.16em; }
+  .done-lead small {
+    font-size: 0.35em;
+    color: var(--gray);
+    margin-left: 8px;
+    letter-spacing: 0;
+    font-family: var(--font-sans);
+  }
+
+  details.log {
+    max-width: 640px;
+    width: 100%;
+    margin: 0 auto;
+    flex-shrink: 0;
+    color: var(--gray);
+    font-size: 13px;
+  }
+  details.log[hidden] { display: none !important; }
+  details.log summary {
+    cursor: pointer;
+    list-style: none;
+    width: fit-content;
+    padding: 8px 0;
+  }
+  details.log summary::-webkit-details-marker { display: none; }
+  details.log summary:hover { color: var(--paper); }
+  .log-panel {
+    border-top: 1px solid var(--hairline);
+    padding: 12px 0 0;
+  }
+  .log-toolbar { margin-bottom: 8px; }
   .log-body {
     max-height: 240px;
-    overflow-y: auto;
-    padding: 12px 16px;
+    overflow: auto;
     font-family: var(--font-mono);
     font-size: 12px;
     line-height: 1.8;
-    color: var(--slate);
+    color: var(--gray);
     white-space: pre-wrap;
     word-break: break-all;
-    border-top: 1px solid var(--hairline);
-    background: #FCFAF7;
-    contain: content;
     scrollbar-width: thin;
-    scrollbar-color: var(--hairline-dark) transparent;
-  }
-  .log-body::-webkit-scrollbar {
-    width: 4px;
-  }
-  .log-body::-webkit-scrollbar-thumb {
-    background: var(--hairline-dark);
+    scrollbar-color: var(--hairline) transparent;
   }
 
-  .error-banner {
-    padding: 10px 14px;
-    background: var(--red-soft);
-    border: 1px solid rgba(201, 59, 43, 0.2);
-    border-radius: var(--radius-md);
-    color: var(--red);
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .error-banner[hidden] {
-    display: none !important;
+  @media (max-width: 560px) {
+    body { padding: 0 18px 22px; }
+    header.top { padding-top: 22px; }
+    main { padding: 36px 0 24px; }
+    .row, .row.multi {
+      grid-template-columns: 1fr;
+      gap: 6px;
+    }
+    .clock { gap: 10px; }
   }
 
-  @media (max-width: 520px) {
-    body { padding: 0 12px 28px; }
-    .metrics-grid { grid-template-columns: repeat(2, 1fr); }
-    .gauge-box { flex-direction: column; text-align: center; }
-    .time-target-sub { justify-content: center; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation: none !important;
+      transition: none !important;
+    }
+    .btn:active:not(:disabled) { transform: none; }
   }
 </style>
 </head>
 <body>
-<div class="app-container">
-  <!-- 顶栏 -->
-  <header class="topbar">
-    <span class="brand-name">anyview-idle</span>
-    <div class="header-actions">
-      <div class="user-badge" id="userBadge" hidden>
-        <span id="userName">用户</span>
-        <button class="logout-btn" id="logoutBtn" title="退出登录">
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3M10 12l4-4-4-4M14 8H5"/></svg>
-        </button>
-      </div>
-      <div class="status-pill" id="statusPill">
-        <i class="dot"></i>
-        <span id="statusText">未连接</span>
-      </div>
-    </div>
-  </header>
+<a class="skip" href="#main">跳到内容</a>
 
-  <div class="error-banner" id="globalError" hidden>
-    <span id="errorMsg"></span>
+<header class="top">
+  <span class="brand">anyview-idle</span>
+  <div class="header-meta">
+    <button type="button" class="who-btn" id="whoBtn" hidden aria-label="退出登录" title="退出登录"></button>
+    <span class="state" id="statusPill" aria-live="polite">
+      <i class="dot" aria-hidden="true"></i>
+      <span id="statusText">未登录</span>
+    </span>
   </div>
+</header>
 
-  <!-- 刻一: 登录面板 -->
-  <main class="stage-view" id="viewLogin" hidden>
-    <div class="swiss-card login-card">
-      <div class="card-header">
-        <span class="card-title">登录</span>
-      </div>
-
-      <div class="login-tabs">
-        <button type="button" class="tab-btn active" id="tabPwd">密码</button>
-        <button type="button" class="tab-btn" id="tabToken">Token</button>
-      </div>
-
-      <form id="loginForm" style="display:flex; flex-direction:column; gap:14px;">
-        <div id="pwdFields" style="display:flex; flex-direction:column; gap:12px;">
-          <div><input class="input-field" id="username" autocomplete="username" placeholder="学号"></div>
-          <div><input class="input-field" id="password" type="password" autocomplete="current-password" placeholder="密码"></div>
-        </div>
-
-        <div id="tokenFields" style="display:none; flex-direction:column; gap:12px;">
-          <div><input class="input-field" id="token" placeholder="Token"></div>
-        </div>
-
-        <details style="font-size:12px; color:var(--caption);">
-          <summary style="cursor:pointer; user-select:none; margin-bottom:6px;">X-Forwarded-For</summary>
-          <input class="input-field" id="xff" placeholder="直连源站时填写">
-        </details>
-
-        <button type="submit" class="btn-primary" id="loginBtn" style="margin-top:4px;">
-          <span>登录</span>
-        </button>
-      </form>
-    </div>
-  </main>
-
-  <!-- 刻二: 运行中视觉监控 -->
-  <main class="stage-view" id="viewRun" hidden>
-    <div class="swiss-card">
-      <div class="question-badge-row">
-        <span class="chap-pill" id="runChapter">-</span>
-        <span class="eid-pill" id="runEid">-</span>
-      </div>
-
-      <h1 class="question-title" id="runQName">-</h1>
-
-      <div class="gauge-box">
-        <div class="dial-wrapper">
-          <svg class="dial-svg" viewBox="0 0 88 88">
-            <circle class="dial-track" cx="44" cy="44" r="38" />
-            <circle class="dial-bar" id="dialBar" cx="44" cy="44" r="38" transform="rotate(-90 44 44)" />
-          </svg>
-          <div class="dial-center-text">
-            <span class="dial-pct tnum" id="dialPct">0%</span>
-          </div>
-        </div>
-
-        <div class="time-stat-col">
-          <div class="time-huge tnum" id="runCurMin">0.0</div>
-          <div class="time-target-sub">
-            <span>目标</span>
-            <strong id="runTargetMin">--</strong>
-            <span style="color:var(--caption); margin-left:4px;" id="runRemaining"></span>
-          </div>
-        </div>
-      </div>
-
-      <div style="display:flex; justify-content:flex-end;">
-        <button type="button" class="btn-stop" id="stopBtn">
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="10" height="10" rx="2"/></svg>
-          停止
-        </button>
-      </div>
-    </div>
-
-    <!-- 4联数据 -->
-    <div class="metrics-grid">
-      <div class="metric-cell">
-        <span class="metric-title">完成</span>
-        <span class="metric-num tnum" id="mDone">0</span>
-      </div>
-      <div class="metric-cell">
-        <span class="metric-title">跳过</span>
-        <span class="metric-num tnum" id="mSkipped">0</span>
-      </div>
-      <div class="metric-cell">
-        <span class="metric-title">错误</span>
-        <span class="metric-num tnum" id="mErrors">0</span>
-      </div>
-      <div class="metric-cell">
-        <span class="metric-title">涨幅</span>
-        <span class="metric-num tnum highlight" id="mGained">0.0m</span>
-      </div>
-    </div>
-
-    <!-- 日志 (仅运行态呈现，首页无日志) -->
-    <details class="log-card" id="logBox" open>
-      <summary class="log-header">
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span>日志</span>
-          <span class="user-badge" id="logCountBadge" style="padding:1px 6px; font-size:11px;">0</span>
-        </div>
-        <div class="log-actions" onclick="event.stopPropagation()">
-          <button type="button" class="log-action-btn" id="copyLogBtn">复制</button>
-        </div>
-      </summary>
-      <div class="log-body" id="logContent"></div>
-    </details>
-  </main>
-
-  <!-- 刻三: 配置面板 (首页) -->
-  <main class="stage-view" id="viewCfg" hidden>
-    <form id="cfgForm" class="stage-view">
-      <!-- 课程 -->
-      <div class="swiss-card">
-        <div class="card-header">
-          <span class="card-title">课程</span>
-          <button type="button" class="btn-secondary" id="refreshBtn">刷新</button>
-        </div>
-        <div class="select-row">
-          <div class="select-wrapper">
-            <select class="swiss-select" id="course" required></select>
-            <div class="select-arrow">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6l5 5 5-5"/></svg>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 时长 (双端点滑轨) -->
-      <div class="swiss-card">
-        <div class="card-header">
-          <span class="card-title">时长</span>
-          <div class="range-inputs-group">
-            <input type="number" class="range-num-input tnum" id="inputLoDuration" step="0.5" min="0.5" max="30" value="5.0">
-            <span class="range-sep">–</span>
-            <input type="number" class="range-num-input tnum" id="inputHiDuration" step="0.5" min="0.5" max="30" value="10.0">
-            <span class="range-unit">分钟</span>
-          </div>
-        </div>
-        <div class="dual-slider-container" id="sliderContainerDuration">
-          <div class="dual-slider-track">
-            <div class="dual-slider-range" id="sliderRangeDuration"></div>
-          </div>
-          <div class="slider-handle" id="thumbLoDuration" tabindex="0"></div>
-          <div class="slider-handle" id="thumbHiDuration" tabindex="0"></div>
-        </div>
-        <div class="slider-scale-row">
-          <span>0.5m</span>
-          <span>10m</span>
-          <span>20m</span>
-          <span>30m</span>
-        </div>
-      </div>
-
-      <!-- 错误注入 (双端点滑轨) -->
-      <div class="swiss-card">
-        <div class="card-header">
-          <span class="card-title">错误注入</span>
-          <div class="range-inputs-group">
-            <input type="number" class="range-num-input tnum" id="inputLoInject" step="1" min="0" max="10" value="1" style="width:44px;">
-            <span class="range-sep">–</span>
-            <input type="number" class="range-num-input tnum" id="inputHiInject" step="1" min="0" max="10" value="3" style="width:44px;">
-            <span class="range-unit">次</span>
-          </div>
-        </div>
-        <div class="dual-slider-container" id="sliderContainerInject">
-          <div class="dual-slider-track">
-            <div class="dual-slider-range" id="sliderRangeInject"></div>
-          </div>
-          <div class="slider-handle" id="thumbLoInject" tabindex="0"></div>
-          <div class="slider-handle" id="thumbHiInject" tabindex="0"></div>
-        </div>
-        <div class="slider-scale-row">
-          <span>0</span>
-          <span>2</span>
-          <span>4</span>
-          <span>6</span>
-          <span>8</span>
-          <span>10</span>
-        </div>
-      </div>
-
-      <!-- 刷题范围 (双端点滑轨，动态完整范围与手动题号输入) -->
-      <div class="swiss-card">
-        <div class="card-header">
-          <div style="display:flex; align-items:center; gap:8px;">
-            <span class="card-title">刷题范围</span>
-            <span class="range-total-badge" id="totalQuestionsBadge">共 -- 题</span>
-          </div>
-          <div class="range-inputs-group">
-            <span class="range-prefix">第</span>
-            <input type="number" class="range-num-input tnum" id="inputLoLimit" step="1" min="1" max="1" value="1">
-            <span class="range-sep">至</span>
-            <input type="number" class="range-num-input tnum" id="inputHiLimit" step="1" min="1" max="1" value="1">
-            <span class="range-unit">题</span>
-          </div>
-        </div>
-        <div class="dual-slider-container" id="sliderContainerLimit">
-          <div class="dual-slider-track">
-            <div class="dual-slider-range" id="sliderRangeLimit"></div>
-          </div>
-          <div class="slider-handle" id="thumbLoLimit" tabindex="0"></div>
-          <div class="slider-handle" id="thumbHiLimit" tabindex="0"></div>
-        </div>
-        <div class="slider-scale-row" id="scaleRowLimit">
-          <span id="scaleMinLimit">1</span>
-          <span id="scaleMidLimit">--</span>
-          <span id="scaleMaxLimit">--</span>
-        </div>
-      </div>
-
-      <!-- 开始 -->
-      <button type="submit" class="btn-primary" id="startBtn" style="padding:14px; font-size:15px; border-radius:var(--radius-lg);">
-        <span>开始</span>
-      </button>
-    </form>
-  </main>
+<div class="banner" id="globalError" hidden role="alert">
+  <span class="msg" id="errorMsg"></span>
+  <button type="button" class="text-btn" id="errorRelogin" hidden>重新登录</button>
+  <button type="button" class="text-btn" id="errorDismiss">关闭</button>
 </div>
+
+<main id="main">
+  <!-- 登录 -->
+  <section class="stage" id="viewLogin">
+    <form id="loginForm" class="stage" style="gap:22px;">
+      <div class="row">
+        <label class="lbl" for="username">学号</label>
+        <input class="uline" id="username" name="username" autocomplete="username" maxlength="32">
+      </div>
+      <div class="row">
+        <label class="lbl" for="password">密码</label>
+        <input class="uline" id="password" name="password" type="password" autocomplete="current-password">
+      </div>
+      <details class="adv" id="advLogin">
+        <summary>token / X-Forwarded-For</summary>
+        <div class="stack">
+          <div class="row">
+            <label class="lbl" for="token">Token</label>
+            <input class="uline" id="token" name="token" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="row">
+            <label class="lbl" for="xff">XFF</label>
+            <input class="uline" id="xff" name="xff" placeholder="直连源站时填写" autocomplete="off" spellcheck="false">
+          </div>
+        </div>
+      </details>
+      <button type="submit" class="btn" id="loginBtn">登录</button>
+    </form>
+  </section>
+
+  <!-- 配置 -->
+  <section class="stage" id="viewCfg" hidden>
+    <form id="cfgForm" class="stage">
+      <div class="row">
+        <label class="lbl" for="course">课程</label>
+        <div class="course-wrap">
+          <select class="uline" id="course" required></select>
+          <button type="button" class="text-btn" id="refreshBtn">刷新</button>
+        </div>
+      </div>
+      <p class="empty-note" id="emptyCourses" hidden>这学期没有可刷的课程（实验课已排除）。</p>
+
+      <div class="row multi">
+        <span class="lbl" id="lblDuration">每题时长</span>
+        <div class="pair" role="group" aria-labelledby="lblDuration">
+          <input class="uline num tnum" id="inputLoDuration" type="number" inputmode="decimal" step="0.5" min="0.5" max="180" value="5.0" aria-label="时长下限，分钟">
+          <span class="sep">–</span>
+          <input class="uline num tnum" id="inputHiDuration" type="number" inputmode="decimal" step="0.5" min="0.5" max="180" value="10.0" aria-label="时长上限，分钟">
+          <span class="unit">分钟</span>
+        </div>
+      </div>
+
+      <div class="row multi">
+        <span class="lbl" id="lblInject">错误注入</span>
+        <div class="pair" role="group" aria-labelledby="lblInject">
+          <input class="uline num tnum" id="inputLoInject" type="number" inputmode="numeric" step="1" min="0" max="50" value="1" aria-label="注入下限">
+          <span class="sep">–</span>
+          <input class="uline num tnum" id="inputHiInject" type="number" inputmode="numeric" step="1" min="0" max="50" value="3" aria-label="注入上限">
+          <span class="unit">次</span>
+        </div>
+      </div>
+
+      <div class="row multi" id="limitRow">
+        <span class="lbl" id="lblLimit">题号</span>
+        <div class="grow">
+          <div class="pair" role="group" aria-labelledby="lblLimit">
+            <input class="uline num tnum" id="inputLoLimit" type="number" inputmode="numeric" step="1" min="1" value="1" aria-label="起始题号">
+            <span class="sep">–</span>
+            <input class="uline num tnum" id="inputHiLimit" type="number" inputmode="numeric" step="1" min="1" value="1" aria-label="结束题号">
+            <span class="unit" id="limitUnit">题</span>
+          </div>
+          <p class="empty-note" id="qHint" style="margin-top:8px;"></p>
+        </div>
+      </div>
+      <p class="empty-note" id="catalogFail" hidden></p>
+
+      <div class="hints">
+        <p>已达标或已通过的题会跳过，时长只往上挂。</p>
+        <p>挂完再注入编译/运行错误，不会跑会判过的代码。存档会还原。</p>
+      </div>
+
+      <button type="submit" class="btn" id="startBtn">开始</button>
+    </form>
+  </section>
+
+  <!-- 运行 -->
+  <section class="stage" id="viewRun" hidden>
+    <p class="qmeta" id="runMeta"></p>
+    <div class="clock" id="runClock">
+      <span class="now" id="runCurMin">0.0</span>
+      <span class="to" id="runTo">→ <span id="runTargetMin">—</span></span>
+    </div>
+    <p class="tally" id="runTally"></p>
+    <div>
+      <button type="button" class="btn btn-ghost" id="stopBtn">停止</button>
+      <p class="stop-hint" id="stopHint" hidden>当前题挂完即停</p>
+    </div>
+  </section>
+
+  <!-- 小结 -->
+  <section class="stage" id="viewDone" hidden>
+    <p class="done-lead" id="doneLead">+0.0<small>分</small></p>
+    <p class="tally" id="doneTally"></p>
+    <p class="empty-note" id="doneNote"></p>
+    <button type="button" class="btn" id="backCfgBtn">返回配置</button>
+  </section>
+</main>
+
+<details class="log" id="logBox" hidden>
+  <summary>夜录 · <span id="logCount">0</span> 行</summary>
+  <div class="log-panel">
+    <div class="log-toolbar">
+      <button type="button" class="text-btn" id="copyLogBtn">复制</button>
+    </div>
+    <div class="log-body" id="logContent" role="log" aria-live="off"></div>
+  </div>
+</details>
 
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
-const min1 = (v) => (Math.round((v || 0) * 10) / 10).toFixed(1);
+const min1 = (v) => (Math.round((Number(v) || 0) * 10) / 10).toFixed(1);
 
 let who = "";
 let curPoll = null;
 let lastLogSig = "";
 let lastRunStarted = "";
+let stopping = false;
+let preferCfg = false;
+let qTotal = 0;
+let catalogSeq = 0;
+let isAttemptingAutoLogin = false;
+let hasInitialLoadedCourses = false;
 
 async function api(path, opts) {
   const res = await fetch(path, opts);
   let body = {};
-  try { body = await res.json(); } catch {}
+  try { body = await res.json(); } catch (e) {}
   if (!res.ok) throw new Error(body.error || ("HTTP " + res.status));
   return body;
 }
 
-function setGlobalError(msg) {
+function setGlobalError(msg, { reauth = false } = {}) {
   const box = $("globalError");
   if (!msg) {
     box.hidden = true;
+    $("errorRelogin").hidden = true;
     return;
   }
   $("errorMsg").textContent = msg;
+  $("errorRelogin").hidden = !reauth;
   box.hidden = false;
+}
+
+function looksLikeAuthError(msg) {
+  const s = String(msg || "");
+  return /119|token|失效|未登录|重新登录|顶掉/i.test(s);
+}
+
+function friendlyError(msg) {
+  const s = String(msg || "");
+  if (/119|顶掉|token 失效/i.test(s)) {
+    return "账号被顶掉或登录已过期，需要重新登录。";
+  }
+  return s;
+}
+
+function formatBig(v) {
+  const s = min1(v);
+  const i = s.indexOf(".");
+  if (i < 0) return s;
+  return '<span class="int">' + s.slice(0, i) + '</span><span class="dot">.</span><span class="frac">' + s.slice(i + 1) + "</span>";
 }
 
 function showStage(stage) {
   $("viewLogin").hidden = stage !== "login";
-  $("viewRun").hidden = stage !== "run";
   $("viewCfg").hidden = stage !== "cfg";
-  try {
-    localStorage.setItem("anyview_last_stage", stage);
-  } catch {}
+  $("viewRun").hidden = stage !== "run";
+  $("viewDone").hidden = stage !== "done";
+  delete document.documentElement.dataset.boot;
+  try { localStorage.setItem("anyview_last_stage", stage); } catch (e) {}
 }
 
-/* 登录选项卡 */
-$("tabPwd").addEventListener("click", () => {
-  $("tabPwd").classList.add("active");
-  $("tabToken").classList.remove("active");
-  $("pwdFields").style.display = "flex";
-  $("tokenFields").style.display = "none";
-});
+function tallyText(st) {
+  const gained = min1((st.gainedSec || 0) / 60);
+  return "挂机 " + (st.done ?? 0)
+    + " · 跳过 " + (st.skipped ?? 0)
+    + " · 失败 " + (st.failed ?? 0)
+    + " · +" + gained + " 分"
+    + " · 注入 " + (st.injectedErrors ?? 0);
+}
 
-$("tabToken").addEventListener("click", () => {
-  $("tabToken").classList.add("active");
-  $("tabPwd").classList.remove("active");
-  $("tokenFields").style.display = "flex";
-  $("pwdFields").style.display = "none";
+function bindPair(loEl, hiEl, { min, max, step, integers }) {
+  const parse = (v) => {
+    const n = integers ? parseInt(v, 10) : parseFloat(v);
+    return Number.isFinite(n) ? n : NaN;
+  };
+  const snap = (n) => {
+    const stepped = Math.round((n - min) / step) * step + min;
+    const clamped = Math.min(max, Math.max(min, stepped));
+    return integers ? Math.round(clamped) : Math.round(clamped * 10) / 10;
+  };
+  const fmt = (n) => integers ? String(n) : n.toFixed(1);
+  const commit = () => {
+    let a = parse(loEl.value);
+    let b = parse(hiEl.value);
+    if (!Number.isFinite(a)) a = min;
+    if (!Number.isFinite(b)) b = max;
+    a = snap(a);
+    b = snap(b);
+    if (a > b) b = a;
+    loEl.value = fmt(a);
+    hiEl.value = fmt(b);
+  };
+  loEl.addEventListener("blur", commit);
+  hiEl.addEventListener("blur", commit);
+  loEl.addEventListener("keydown", (e) => { if (e.key === "Enter") loEl.blur(); });
+  hiEl.addEventListener("keydown", (e) => { if (e.key === "Enter") hiEl.blur(); });
+  return {
+    commit,
+    getLo: () => parse(loEl.value),
+    getHi: () => parse(hiEl.value),
+    set(lo, hi) {
+      loEl.value = fmt(snap(lo));
+      hiEl.value = fmt(snap(hi));
+      commit();
+    },
+    setBounds(nextMin, nextMax) {
+      min = nextMin;
+      max = Math.max(nextMin, nextMax);
+      loEl.min = min; hiEl.min = min;
+      loEl.max = max; hiEl.max = max;
+    }
+  };
+}
+
+const durationPair = bindPair($("inputLoDuration"), $("inputHiDuration"), {
+  min: 0.5, max: 180, step: 0.5, integers: false
+});
+const injectPair = bindPair($("inputLoInject"), $("inputHiInject"), {
+  min: 0, max: 50, step: 1, integers: true
+});
+const limitPair = bindPair($("inputLoLimit"), $("inputHiLimit"), {
+  min: 1, max: 1, step: 1, integers: true
 });
 
 $("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   setGlobalError("");
   const btn = $("loginBtn");
+  const token = $("token").value.trim();
+  const username = $("username").value.trim();
+  const password = $("password").value;
+  if (!token && (!username || !password)) {
+    setGlobalError("填写学号和密码，或展开填入 token。");
+    return;
+  }
   btn.disabled = true;
-
+  btn.textContent = "登录中";
   try {
-    const isToken = $("tabToken").classList.contains("active");
     const payload = {
-      username: isToken ? "" : $("username").value.trim(),
-      password: isToken ? "" : $("password").value,
-      token: isToken ? $("token").value.trim() : "",
+      username: token ? "" : username,
+      password: token ? "" : password,
+      token,
       xff: $("xff").value.trim(),
     };
     const body = await api("/api/login", {
@@ -1045,305 +758,51 @@ $("loginForm").addEventListener("submit", async (e) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    who = (body.student && (body.student.name || body.student.id)) || "在线学员";
+    who = (body.student && (body.student.name || body.student.no)) || "在线";
     if (body.token) {
-      localStorage.setItem("anyview_token", body.token);
+      try { localStorage.setItem("anyview_token", body.token); } catch (err) {}
     }
     if (payload.xff) {
-      localStorage.setItem("anyview_xff", payload.xff);
+      try { localStorage.setItem("anyview_xff", payload.xff); } catch (err) {}
     }
     hasInitialLoadedCourses = true;
+    preferCfg = true;
     fillCourses(body.courses || []);
-    renderStatus(curPoll || { running: false, authenticated: true });
+    renderStatus(Object.assign({}, curPoll || {}, { running: false, authenticated: true, student: who }));
   } catch (err) {
-    setGlobalError(err.message);
+    setGlobalError(err.message + "。检查学号密码，或稍后再试。");
   } finally {
     btn.disabled = false;
+    btn.textContent = "登录";
   }
 });
 
-$("logoutBtn").addEventListener("click", async () => {
+$("whoBtn").addEventListener("click", async () => {
   who = "";
-  localStorage.removeItem("anyview_token");
-  try { await api("/api/logout", { method: "POST" }); } catch {}
+  preferCfg = false;
+  stopping = false;
+  try { localStorage.removeItem("anyview_token"); } catch (e) {}
+  try { await api("/api/logout", { method: "POST" }); } catch (e) {}
   setGlobalError("");
   hasInitialLoadedCourses = false;
   renderStatus({ running: false, authenticated: false });
 });
 
-/* 通用双端点滑动条工厂 (双向绑定手动数字输入框) */
-function createDualSlider({
-  containerId,
-  rangeId,
-  thumbLoId,
-  thumbHiId,
-  inputLoId,
-  inputHiId,
-  min,
-  max,
-  step,
-  defaultLo,
-  defaultHi,
-  decimals = 0,
-  onChange
-}) {
-  let curMin = min;
-  let curMax = max;
-  let curStep = step;
-  let valLo = defaultLo;
-  let valHi = defaultHi;
-
-  const container = $(containerId);
-  const range = $(rangeId);
-  const thumbLo = $(thumbLoId);
-  const thumbHi = $(thumbHiId);
-  const inputLo = $(inputLoId);
-  const inputHi = $(inputHiId);
-
-  function valToPct(v) {
-    if (curMax <= curMin) return 0;
-    return ((v - curMin) / (curMax - curMin)) * 100;
-  }
-
-  function pctToVal(pct) {
-    const raw = curMin + (pct / 100) * (curMax - curMin);
-    const stepped = Math.round((raw - curMin) / curStep) * curStep + curMin;
-    return Math.min(curMax, Math.max(curMin, stepped));
-  }
-
-  function formatVal(v) {
-    return decimals > 0 ? v.toFixed(decimals) : String(Math.round(v));
-  }
-
-  function syncInputs() {
-    if (inputLo && document.activeElement !== inputLo) {
-      inputLo.value = formatVal(valLo);
-    }
-    if (inputHi && document.activeElement !== inputHi) {
-      inputHi.value = formatVal(valHi);
-    }
-  }
-
-  function updateUI(skipInputs = false) {
-    const pctLo = valToPct(valLo);
-    const pctHi = valToPct(valHi);
-
-    thumbLo.style.left = pctLo + "%";
-    thumbHi.style.left = pctHi + "%";
-    range.style.left = pctLo + "%";
-    range.style.width = Math.max(0, pctHi - pctLo) + "%";
-
-    if (!skipInputs) syncInputs();
-
-    if (onChange) onChange(valLo, valHi);
-  }
-
-  function setupThumb(thumb, isMin) {
-    thumb.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      thumb.setPointerCapture(e.pointerId);
-      thumbLo.style.zIndex = isMin ? "3" : "2";
-      thumbHi.style.zIndex = isMin ? "2" : "3";
-
-      const onMove = (ev) => {
-        const rect = container.getBoundingClientRect();
-        const pct = Math.max(0, Math.min(100, ((ev.clientX - rect.left) / rect.width) * 100));
-        const target = pctToVal(pct);
-        if (isMin) {
-          if (target > valHi) {
-            valLo = valHi;
-          } else {
-            valLo = Math.max(curMin, target);
-          }
-        } else {
-          if (target < valLo) {
-            valHi = valLo;
-          } else {
-            valHi = Math.min(curMax, target);
-          }
-        }
-        updateUI();
-      };
-
-      const onUp = (ev) => {
-        thumb.releasePointerCapture(ev.pointerId);
-        thumb.removeEventListener("pointermove", onMove);
-        thumb.removeEventListener("pointerup", onUp);
-      };
-
-      thumb.addEventListener("pointermove", onMove);
-      thumb.addEventListener("pointerup", onUp);
-    });
-
-    thumb.addEventListener("keydown", (e) => {
-      let delta = 0;
-      if (e.key === "ArrowLeft" || e.key === "ArrowDown") delta = -curStep;
-      if (e.key === "ArrowRight" || e.key === "ArrowUp") delta = curStep;
-      if (delta !== 0) {
-        e.preventDefault();
-        if (isMin) {
-          valLo = Math.max(curMin, Math.min(valHi, valLo + delta));
-        } else {
-          valHi = Math.max(valLo, Math.min(curMax, valHi + delta));
-        }
-        updateUI();
-      }
-    });
-  }
-
-  setupThumb(thumbLo, true);
-  setupThumb(thumbHi, false);
-
-  container.addEventListener("pointerdown", (e) => {
-    if (e.target === thumbLo || e.target === thumbHi) return;
-    const rect = container.getBoundingClientRect();
-    const pct = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
-    const clicked = pctToVal(pct);
-    const distLo = Math.abs(clicked - valLo);
-    const distHi = Math.abs(clicked - valHi);
-    if (distLo < distHi || (distLo === distHi && clicked < valLo)) {
-      valLo = Math.max(curMin, Math.min(valHi, clicked));
-      thumbLo.style.zIndex = "3";
-      thumbHi.style.zIndex = "2";
-    } else {
-      valHi = Math.min(curMax, Math.max(valLo, clicked));
-      thumbHi.style.zIndex = "3";
-      thumbLo.style.zIndex = "2";
-    }
-    updateUI();
-  });
-
-  /* 双向绑定：手动输入监听 */
-  if (inputLo) {
-    inputLo.addEventListener("input", () => {
-      let parsed = parseFloat(inputLo.value);
-      if (isNaN(parsed)) return;
-      parsed = Math.max(curMin, Math.min(curMax, parsed));
-      if (parsed > valHi) {
-        valHi = parsed;
-      }
-      valLo = parsed;
-      updateUI(true);
-    });
-
-    const commitLo = () => {
-      let parsed = parseFloat(inputLo.value);
-      if (isNaN(parsed)) parsed = valLo;
-      parsed = Math.round((parsed - curMin) / curStep) * curStep + curMin;
-      parsed = Math.max(curMin, Math.min(curMax, parsed));
-      if (parsed > valHi) {
-        valHi = parsed;
-      }
-      valLo = parsed;
-      updateUI(false);
-    };
-    inputLo.addEventListener("blur", commitLo);
-    inputLo.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); inputLo.blur(); } });
-  }
-
-  if (inputHi) {
-    inputHi.addEventListener("input", () => {
-      let parsed = parseFloat(inputHi.value);
-      if (isNaN(parsed)) return;
-      parsed = Math.max(curMin, Math.min(curMax, parsed));
-      if (parsed < valLo) {
-        valLo = parsed;
-      }
-      valHi = parsed;
-      updateUI(true);
-    });
-
-    const commitHi = () => {
-      let parsed = parseFloat(inputHi.value);
-      if (isNaN(parsed)) parsed = valHi;
-      parsed = Math.round((parsed - curMin) / curStep) * curStep + curMin;
-      parsed = Math.max(curMin, Math.min(curMax, parsed));
-      if (parsed < valLo) {
-        valLo = parsed;
-      }
-      valHi = parsed;
-      updateUI(false);
-    };
-    inputHi.addEventListener("blur", commitHi);
-    inputHi.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); inputHi.blur(); } });
-  }
-
-  updateUI();
-
-  return {
-    getLo: () => valLo,
-    getHi: () => valHi,
-    getMax: () => curMax,
-    setValues: (lo, hi) => {
-      valLo = Math.max(curMin, Math.min(curMax, lo));
-      valHi = Math.max(valLo, Math.min(curMax, hi));
-      updateUI();
-    },
-    setMax: (newMax) => {
-      curMax = Math.max(curMin, newMax);
-      if (inputLo) { inputLo.min = curMin; inputLo.max = curMax; }
-      if (inputHi) { inputHi.min = curMin; inputHi.max = curMax; }
-      valLo = Math.max(curMin, Math.min(curMax, valLo));
-      valHi = Math.max(valLo, Math.min(curMax, curMax));
-      updateUI();
-    }
-  };
-}
-
-/* 实例化 3 个滑动条 */
-const sliderDuration = createDualSlider({
-  containerId: "sliderContainerDuration",
-  rangeId: "sliderRangeDuration",
-  thumbLoId: "thumbLoDuration",
-  thumbHiId: "thumbHiDuration",
-  inputLoId: "inputLoDuration",
-  inputHiId: "inputHiDuration",
-  min: 0.5,
-  max: 30.0,
-  step: 0.5,
-  defaultLo: 5.0,
-  defaultHi: 10.0,
-  decimals: 1,
+$("errorDismiss").addEventListener("click", () => setGlobalError(""));
+$("errorRelogin").addEventListener("click", async () => {
+  $("whoBtn").click();
 });
 
-const sliderInject = createDualSlider({
-  containerId: "sliderContainerInject",
-  rangeId: "sliderRangeInject",
-  thumbLoId: "thumbLoInject",
-  thumbHiId: "thumbHiInject",
-  inputLoId: "inputLoInject",
-  inputHiId: "inputHiInject",
-  min: 0,
-  max: 10,
-  step: 1,
-  defaultLo: 1,
-  defaultHi: 3,
-  decimals: 0,
-});
-
-const sliderLimit = createDualSlider({
-  containerId: "sliderContainerLimit",
-  rangeId: "sliderRangeLimit",
-  thumbLoId: "thumbLoLimit",
-  thumbHiId: "thumbHiLimit",
-  inputLoId: "inputLoLimit",
-  inputHiId: "inputHiLimit",
-  min: 1,
-  max: 1,
-  step: 1,
-  defaultLo: 1,
-  defaultHi: 1,
-  decimals: 0,
-});
-
-/* 课程更新 (黑名单过滤「实验」，支持恢复上次保存的课程与题号范围) */
 function fillCourses(courses, savedOpts) {
-  const valid = (courses || []).filter(c => !(c.courseName || "").includes("实验"));
+  const valid = (courses || []).filter((c) => !(c.courseName || "").includes("实验"));
   const sel = $("course");
   sel.innerHTML = "";
+  $("emptyCourses").hidden = valid.length > 0;
   if (!valid.length) {
-    sel.innerHTML = '<option value="">无可用课程 (已过滤实验)</option>';
+    sel.innerHTML = '<option value="">无课程</option>';
     $("startBtn").disabled = true;
+    $("limitRow").hidden = true;
+    $("qHint").textContent = "";
     return;
   }
   let matchedIdx = 0;
@@ -1365,27 +824,35 @@ function fillCourses(courses, savedOpts) {
 async function onCourseChange(savedOpts) {
   const selVal = $("course").value;
   if (!selVal) return;
+  const seq = ++catalogSeq;
+  $("catalogFail").hidden = true;
+  $("qHint").textContent = "读取目录…";
   try {
     const c = JSON.parse(selVal);
-    const data = await api('/api/catalog?schemeId=' + c.schemeId + '&classId=' + c.classId);
-    const total = data.total || 1;
-    sliderLimit.setMax(total);
+    const data = await api("/api/catalog?schemeId=" + c.schemeId + "&classId=" + c.classId);
+    if (seq !== catalogSeq) return;
+    const total = Math.max(1, data.total || 1);
+    qTotal = total;
+    $("limitRow").hidden = false;
+    limitPair.setBounds(1, total);
     if (savedOpts && savedOpts.schemeId === c.schemeId && savedOpts.classId === c.classId && savedOpts.limit > 0) {
       const qLo = (savedOpts.offset || 0) + 1;
       const qHi = Math.min(total, (savedOpts.offset || 0) + savedOpts.limit);
-      sliderLimit.setValues(qLo, qHi);
+      limitPair.set(qLo, qHi);
     } else {
-      sliderLimit.setValues(1, total);
+      limitPair.set(1, total);
     }
-    $("totalQuestionsBadge").textContent = '共 ' + total + ' 题' + (data.unpassed !== undefined ? ' (' + data.unpassed + ' 可刷)' : '');
-    $("scaleMidLimit").textContent = String(Math.round(total / 2));
-    $("scaleMaxLimit").textContent = String(total);
+    const unpassed = data.unpassed;
+    $("qHint").textContent = "共 " + total + " 题"
+      + (unpassed !== undefined ? "，" + unpassed + " 题未通过" : "");
+    $("catalogFail").hidden = true;
   } catch (e) {
-    sliderLimit.setMax(30);
-    sliderLimit.setValues(1, 30);
-    $("totalQuestionsBadge").textContent = '共 30 题';
-    $("scaleMidLimit").textContent = "15";
-    $("scaleMaxLimit").textContent = "30";
+    if (seq !== catalogSeq) return;
+    qTotal = 0;
+    $("limitRow").hidden = true;
+    $("qHint").textContent = "";
+    $("catalogFail").hidden = false;
+    $("catalogFail").textContent = "目录暂时读不到，将按全部未通过题开刷。";
   }
 }
 
@@ -1394,42 +861,43 @@ $("course").addEventListener("change", () => onCourseChange());
 $("refreshBtn").addEventListener("click", async () => {
   const btn = $("refreshBtn");
   btn.disabled = true;
+  btn.textContent = "刷新中";
   try {
     const courses = await api("/api/courses");
     fillCourses(courses);
+    setGlobalError("");
   } catch (err) {
-    setGlobalError(err.message);
+    setGlobalError("课程列表刷新失败。" + err.message);
   } finally {
     btn.disabled = false;
+    btn.textContent = "刷新";
   }
 });
 
-/* 启动挂机 */
 $("cfgForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   setGlobalError("");
+  durationPair.commit();
+  injectPair.commit();
+  if (!$("limitRow").hidden) limitPair.commit();
   const btn = $("startBtn");
   btn.disabled = true;
-
   try {
     const course = JSON.parse($("course").value || "null");
-    if (!course) throw new Error("请选择课程");
-
-    const lo = sliderDuration.getLo();
-    const hi = sliderDuration.getHi();
-    const iLo = sliderInject.getLo();
-    const iHi = sliderInject.getHi();
-    const qLo = sliderLimit.getLo();
-    const qHi = sliderLimit.getHi();
-
-    const maxQ = sliderLimit.getMax();
+    if (!course) throw new Error("先选一门课程");
+    const lo = durationPair.getLo();
+    const hi = durationPair.getHi();
+    if (!(lo > 0) || hi < lo) throw new Error("时长区间需要 0 以上，且下限不大于上限。");
     let offset = 0;
     let limit = 0;
-    if (!(qLo === 1 && qHi === maxQ)) {
-      offset = Math.max(0, qLo - 1);
-      limit = Math.max(1, qHi - qLo + 1);
+    if (!$("limitRow").hidden && qTotal > 0) {
+      const qLo = limitPair.getLo();
+      const qHi = limitPair.getHi();
+      if (!(qLo === 1 && qHi === qTotal)) {
+        offset = Math.max(0, qLo - 1);
+        limit = Math.max(1, qHi - qLo + 1);
+      }
     }
-
     await api("/api/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1438,12 +906,14 @@ $("cfgForm").addEventListener("submit", async (e) => {
         classId: course.classId,
         loMin: lo,
         hiMin: hi,
-        injectLo: iLo,
-        injectHi: iHi,
-        offset: offset,
-        limit: limit,
+        injectLo: injectPair.getLo(),
+        injectHi: injectPair.getHi(),
+        offset,
+        limit,
       }),
     });
+    preferCfg = false;
+    stopping = false;
     const st = await api("/api/status");
     renderStatus(st);
   } catch (err) {
@@ -1456,13 +926,25 @@ $("cfgForm").addEventListener("submit", async (e) => {
 $("stopBtn").addEventListener("click", async () => {
   const btn = $("stopBtn");
   btn.disabled = true;
+  stopping = true;
+  $("stopHint").hidden = false;
+  btn.textContent = "收尾中";
+  updateHeaderState(curPoll || { running: true, authenticated: true });
   try {
     await api("/api/stop", { method: "POST" });
   } catch (err) {
-    setGlobalError(err.message);
+    stopping = false;
+    setGlobalError("停止失败。" + err.message);
   } finally {
     btn.disabled = false;
   }
+});
+
+$("backCfgBtn").addEventListener("click", () => {
+  preferCfg = true;
+  setGlobalError("");
+  showStage("cfg");
+  updateHeaderState(curPoll || { authenticated: true, running: false });
 });
 
 $("copyLogBtn").addEventListener("click", () => {
@@ -1470,34 +952,39 @@ $("copyLogBtn").addEventListener("click", () => {
   navigator.clipboard.writeText(text).then(() => {
     $("copyLogBtn").textContent = "已复制";
     setTimeout(() => { $("copyLogBtn").textContent = "复制"; }, 1500);
+  }).catch(() => {
+    $("copyLogBtn").textContent = "复制失败";
+    setTimeout(() => { $("copyLogBtn").textContent = "复制"; }, 1500);
   });
 });
 
-/* 状态更新机 */
 function updateHeaderState(st) {
   const pill = $("statusPill");
   const text = $("statusText");
-  pill.className = "status-pill";
-
-  if (st.running) {
+  pill.className = "state";
+  if (st.running && stopping) {
+    text.textContent = "收尾中";
+  } else if (st.running) {
     pill.classList.add("running");
     text.textContent = "运行中";
   } else if (st.error) {
     pill.classList.add("error");
     text.textContent = "出错";
+  } else if (who && !preferCfg && st.finishedAt) {
+    pill.classList.add("done");
+    text.textContent = "完成";
   } else if (who) {
-    pill.classList.add("waiting");
-    text.textContent = "就绪";
+    text.textContent = "空闲";
   } else {
     text.textContent = "未登录";
   }
 
-  const userBadge = $("userBadge");
+  const whoBtn = $("whoBtn");
   if (who) {
-    $("userName").textContent = who;
-    userBadge.hidden = false;
+    whoBtn.textContent = who;
+    whoBtn.hidden = false;
   } else {
-    userBadge.hidden = true;
+    whoBtn.hidden = true;
   }
 }
 
@@ -1510,34 +997,36 @@ function updateLogStream(logLines, startedAt) {
   const lines = logLines || [];
   const last = lines.length ? lines[lines.length - 1] : "";
   const sig = lines.length + "\0" + last;
+  $("logCount").textContent = String(lines.length);
+  $("logBox").hidden = lines.length === 0;
   if (sig === lastLogSig) return;
   lastLogSig = sig;
-  $("logCountBadge").textContent = String(lines.length);
   const container = $("logContent");
   const isAtBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 40;
-  const displayLines = lines.slice(-150);
-  container.textContent = displayLines.join("\n");
-  if (isAtBottom) {
-    container.scrollTop = container.scrollHeight;
-  }
+  container.textContent = lines.slice(-150).join("\n");
+  if (isAtBottom) container.scrollTop = container.scrollHeight;
 }
-
-let isAttemptingAutoLogin = false;
-let hasInitialLoadedCourses = false;
 
 function applySavedOptions(opts) {
   if (!opts) return;
   if (opts.loMin !== undefined && opts.hiMin !== undefined) {
-    sliderDuration.setValues(opts.loMin, opts.hiMin);
+    durationPair.set(opts.loMin, opts.hiMin);
   }
   if (opts.injectLo !== undefined && opts.injectHi !== undefined) {
-    sliderInject.setValues(opts.injectLo, opts.injectHi);
+    injectPair.set(opts.injectLo, opts.injectHi);
   }
 }
 
 function renderStatus(st) {
   curPoll = st;
+  if (!st.running) {
+    stopping = false;
+    $("stopBtn").textContent = "停止";
+    $("stopHint").hidden = true;
+  }
+
   updateHeaderState(st);
+  updateLogStream(st.log || [], st.startedAt);
 
   if (!st.authenticated && !who) {
     showStage("login");
@@ -1545,67 +1034,58 @@ function renderStatus(st) {
   }
 
   if (st.running) {
+    preferCfg = false;
     showStage("run");
-    updateLogStream(st.log || [], st.startedAt);
     const cur = st.current;
     if (cur) {
-      $("runChapter").textContent = '第' + (cur.chapName || "-") + '章';
-      $("runEid").textContent = 'EID ' + (cur.eid || "-");
-      $("runQName").textContent = cur.pname || "载入中";
-      $("runTargetMin").textContent = min1(cur.targetMin) + 'm';
+      $("runMeta").innerHTML = "<strong></strong> · 第<span></span>章 · eid <span></span>";
+      $("runMeta").querySelector("strong").textContent = cur.pname || "载入中";
+      $("runMeta").querySelectorAll("span")[0].textContent = cur.chapName || "—";
+      $("runMeta").querySelectorAll("span")[1].textContent = String(cur.eid || "—");
+      $("runClock").classList.remove("is-gap");
+      $("runTo").hidden = false;
     } else {
-      $("runChapter").textContent = "-";
-      $("runEid").textContent = "-";
-      $("runQName").textContent = "换题间隙";
-      $("runTargetMin").textContent = "--";
+      $("runMeta").textContent = "换题间隙";
+      $("runClock").classList.add("is-gap");
+      $("runTo").hidden = true;
     }
-
-    $("mDone").textContent = st.done ?? 0;
-    $("mSkipped").textContent = st.skipped ?? 0;
-    $("mErrors").textContent = st.injectedErrors ?? 0;
-    $("mGained").textContent = '+' + min1((st.gainedSec || 0) / 60) + 'm';
-
+    $("runTally").textContent = tallyText(st);
     tickBigNumeral();
     return;
   }
 
-  showStage("cfg");
   if (st.error) {
-    setGlobalError(st.error);
+    setGlobalError(friendlyError(st.error), { reauth: looksLikeAuthError(st.error) });
   }
+
+  const hadRun = !!(st.startedAt || st.finishedAt || (st.log && st.log.length) || st.done || st.gainedSec);
+  if (!preferCfg && hadRun) {
+    showStage("done");
+    $("doneLead").innerHTML = "+" + formatBig((st.gainedSec || 0) / 60) + "<small>分</small>";
+    $("doneTally").textContent = tallyText(st);
+    $("doneNote").textContent = st.error ? "这一轮中止。返回配置后可再开。" : "";
+    $("doneNote").hidden = !$("doneNote").textContent;
+    return;
+  }
+
+  showStage("cfg");
 }
 
 function tickBigNumeral() {
   if (!curPoll || !curPoll.running) return;
   const cur = curPoll.current;
   if (!cur) {
-    $("runCurMin").textContent = "--";
-    $("dialPct").textContent = "···";
-    $("dialBar").style.strokeDashoffset = "238.76";
-    $("dialBar").style.opacity = "0";
-    $("runTargetMin").textContent = "--";
-    $("runRemaining").textContent = "(换题间隙)";
+    $("runCurMin").textContent = "···";
+    $("runTargetMin").textContent = "";
     return;
   }
-
   const startTime = new Date(cur.startedAt).getTime();
-  const now = Date.now();
-  const elapsedMin = Math.max(0, (now - startTime) / 60000);
+  const elapsedMin = Math.max(0, (Date.now() - startTime) / 60000);
   const initialAccumMin = Math.max(0, (cur.accumSec || 0) / 60);
   const currentTotalMin = initialAccumMin + elapsedMin;
   const targetMin = Math.max(0.1, cur.targetMin || 1);
-
-  $("runCurMin").textContent = min1(currentTotalMin);
-  $("runTargetMin").textContent = min1(targetMin) + 'm';
-
-  const ratio = Math.min(1, Math.max(0, currentTotalMin / targetMin));
-  const offset = Math.max(0, Math.min(238.76, 238.76 * (1 - ratio)));
-  $("dialBar").style.strokeDashoffset = offset.toFixed(1);
-  $("dialBar").style.opacity = ratio > 0.005 ? "1" : "0";
-  $("dialPct").textContent = Math.round(ratio * 100) + '%';
-
-  const rem = Math.max(0, targetMin - currentTotalMin);
-  $("runRemaining").textContent = '(余 ' + min1(rem) + 'm)';
+  $("runCurMin").innerHTML = formatBig(currentTotalMin);
+  $("runTargetMin").textContent = min1(targetMin);
 }
 
 setInterval(() => {
@@ -1616,9 +1096,9 @@ async function pollStatus() {
   try {
     let st = await api("/api/status");
     if (st.authenticated) {
-      who = st.student || "在线学员";
+      who = st.student || who || "在线";
       if (st.token) {
-        localStorage.setItem("anyview_token", st.token);
+        try { localStorage.setItem("anyview_token", st.token); } catch (e) {}
       }
       if (!hasInitialLoadedCourses) {
         hasInitialLoadedCourses = true;
@@ -1626,7 +1106,7 @@ async function pollStatus() {
           const courses = await api("/api/courses");
           fillCourses(courses, st.savedOptions);
           if (st.savedOptions) applySavedOptions(st.savedOptions);
-        } catch {}
+        } catch (e) {}
       }
     } else {
       const localToken = localStorage.getItem("anyview_token");
@@ -1641,36 +1121,45 @@ async function pollStatus() {
               xff: localStorage.getItem("anyview_xff") || "",
             }),
           });
-          who = (body.student && (body.student.name || body.student.id)) || "在线学员";
-          if (body.token) localStorage.setItem("anyview_token", body.token);
+          who = (body.student && (body.student.name || body.student.no)) || "在线";
+          if (body.token) {
+            try { localStorage.setItem("anyview_token", body.token); } catch (e) {}
+          }
           hasInitialLoadedCourses = true;
           fillCourses(body.courses || [], st.savedOptions);
           if (st.savedOptions) applySavedOptions(st.savedOptions);
           st = await api("/api/status");
         } catch (e) {
-          localStorage.removeItem("anyview_token");
+          try { localStorage.removeItem("anyview_token"); } catch (err) {}
         } finally {
           isAttemptingAutoLogin = false;
         }
       }
     }
     renderStatus(st);
-  } catch {}
+  } catch (e) {}
   setTimeout(pollStatus, 2000);
 }
 
 const savedLocalToken = localStorage.getItem("anyview_token") || "";
 const savedLocalXff = localStorage.getItem("anyview_xff") || "";
-if (savedLocalToken) $("token").value = savedLocalToken;
+if (savedLocalToken) {
+  $("token").value = savedLocalToken;
+  $("advLogin").open = true;
+}
 if (savedLocalXff) $("xff").value = savedLocalXff;
 
-// 消除首屏闪烁：如已有本地令牌，同步直接展示对应面板（默认 cfg，若上次处于运行态则显示 run），实现 0 闪屏直入
-if (savedLocalToken) {
+try {
   const lastStage = localStorage.getItem("anyview_last_stage");
-  showStage(lastStage === "run" ? "run" : "cfg");
-}
+  if (lastStage === "cfg" || lastStage === "login") preferCfg = true;
+} catch (e) {}
 
-pollStatus();
+if (savedLocalToken) showStage("cfg");
+else showStage("login");
+
+if (new URLSearchParams(location.search).get("shot") !== "1") {
+  pollStatus();
+}
 </script>
 </body>
 </html>
