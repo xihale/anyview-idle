@@ -56,7 +56,15 @@ func saveStateLocked() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(*stateFile, b, 0600)
+	tmp := *stateFile + ".tmp"
+	if err := os.WriteFile(tmp, b, 0600); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, *stateFile); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
 }
 
 func saveState() error {
@@ -113,7 +121,8 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	mgr.SetSession(client, student)
 
-	// 后端持久化记录用户名、密码及生成的 Token
+	// 后端持久化记录用户名、密码及生成的 Token。
+	// SetSession 会停掉在跑的任务, 必须把 TaskRunning 一并清掉, 否则崩溃后会用旧 options 自动恢复。
 	stateMu.Lock()
 	if req.Token != "" {
 		appState.Token = req.Token
@@ -124,6 +133,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	appState.XFF = req.XFF
 	appState.Student = student
+	appState.TaskRunning = false
 	_ = saveStateLocked()
 	stateMu.Unlock()
 
@@ -363,6 +373,14 @@ func main() {
 	mux.HandleFunc("POST /api/stop", handleStop)
 	mux.HandleFunc("GET /api/status", handleStatus)
 
+	srv := &http.Server{
+		Addr:              *addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
 	log.Printf("anyview-idle 已启动: http://%s", *addr)
-	log.Fatal(http.ListenAndServe(*addr, mux))
+	log.Fatal(srv.ListenAndServe())
 }

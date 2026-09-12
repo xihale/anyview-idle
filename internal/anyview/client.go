@@ -20,12 +20,14 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
 	BaseURL   = "https://anyview.gdut.edu.cn"
 	WSBaseURL = "wss://anyview.gdut.edu.cn/api/exam-service/websocket"
 	DefaultUA = "Teru-Hack/FuckVersion.0"
+	maxBody   = 8 << 20
 )
 
 // 服务端成功码: 200 现行; 31/41/70 旧成功码 (fuckView common.ts 全集, 实测
@@ -86,9 +88,12 @@ func (c *Client) do(ctx context.Context, method, path string, contentType string
 		return nil, err
 	}
 	defer resp.Body.Close()
-	raw, err := io.ReadAll(resp.Body)
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
 	if err != nil {
 		return nil, err
+	}
+	if len(raw) > maxBody {
+		return nil, fmt.Errorf("响应过大 (>%d bytes)", maxBody)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, truncate(string(raw), 200))
@@ -125,7 +130,11 @@ func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
-	return s[:n] + "…"
+	s = s[:n]
+	for len(s) > 0 && !utf8.ValidString(s) {
+		s = s[:len(s)-1]
+	}
+	return s + "…"
 }
 
 // ---------- 登录 ----------
@@ -454,6 +463,9 @@ func (c *Client) Compile(ctx context.Context, eID int64, codeB64, qfn string) (*
 	if err != nil {
 		return nil, fmt.Errorf("编译请求失败: %w", err)
 	}
+	if !codeOK(env.Code) {
+		return nil, fmt.Errorf("编译失败: code=%v %s", env.Code, env.Message)
+	}
 	var data CompileData
 	if err := json.Unmarshal(env.Data, &data); err != nil {
 		return nil, fmt.Errorf("编译响应解析失败: %w", err)
@@ -476,6 +488,9 @@ func (c *Client) RunGroup(ctx context.Context, eID int64, codeB64, qfn string, k
 	})
 	if err != nil {
 		return nil, fmt.Errorf("判题请求失败: %w", err)
+	}
+	if !codeOK(env.Code) {
+		return nil, fmt.Errorf("判题失败: code=%v %s", env.Code, env.Message)
 	}
 	var data RunData
 	if err := json.Unmarshal(env.Data, &data); err != nil {
@@ -561,4 +576,3 @@ func (c *Client) ExerciseDetail(ctx context.Context, eID int64) (*ExerciseRecord
 	}
 	return resp.Exercise, nil
 }
-

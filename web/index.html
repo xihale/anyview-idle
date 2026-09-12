@@ -981,7 +981,8 @@ const min1 = (v) => (Math.round((v || 0) * 10) / 10).toFixed(1);
 
 let who = "";
 let curPoll = null;
-let lastLogLen = 0;
+let lastLogSig = "";
+let lastRunStarted = "";
 
 async function api(path, opts) {
   const res = await fetch(path, opts);
@@ -1337,7 +1338,7 @@ const sliderLimit = createDualSlider({
 
 /* 课程更新 (黑名单过滤「实验」，支持恢复上次保存的课程与题号范围) */
 function fillCourses(courses, savedOpts) {
-  const valid = (courses || []).filter(c => !c.courseName.includes("实验"));
+  const valid = (courses || []).filter(c => !(c.courseName || "").includes("实验"));
   const sel = $("course");
   sel.innerHTML = "";
   if (!valid.length) {
@@ -1500,13 +1501,21 @@ function updateHeaderState(st) {
   }
 }
 
-function updateLogStream(logLines) {
-  if (!logLines || logLines.length === lastLogLen) return;
-  lastLogLen = logLines.length;
-  $("logCountBadge").textContent = String(lastLogLen);
+function updateLogStream(logLines, startedAt) {
+  const started = startedAt || "";
+  if (started !== lastRunStarted) {
+    lastRunStarted = started;
+    lastLogSig = "";
+  }
+  const lines = logLines || [];
+  const last = lines.length ? lines[lines.length - 1] : "";
+  const sig = lines.length + "\0" + last;
+  if (sig === lastLogSig) return;
+  lastLogSig = sig;
+  $("logCountBadge").textContent = String(lines.length);
   const container = $("logContent");
   const isAtBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 40;
-  const displayLines = logLines.slice(-150);
+  const displayLines = lines.slice(-150);
   container.textContent = displayLines.join("\n");
   if (isAtBottom) {
     container.scrollTop = container.scrollHeight;
@@ -1537,7 +1546,7 @@ function renderStatus(st) {
 
   if (st.running) {
     showStage("run");
-    updateLogStream(st.log || []);
+    updateLogStream(st.log || [], st.startedAt);
     const cur = st.current;
     if (cur) {
       $("runChapter").textContent = '第' + (cur.chapName || "-") + '章';
@@ -1605,7 +1614,7 @@ setInterval(() => {
 
 async function pollStatus() {
   try {
-    const st = await api("/api/status");
+    let st = await api("/api/status");
     if (st.authenticated) {
       who = st.student || "在线学员";
       if (st.token) {
@@ -1637,6 +1646,7 @@ async function pollStatus() {
           hasInitialLoadedCourses = true;
           fillCourses(body.courses || [], st.savedOptions);
           if (st.savedOptions) applySavedOptions(st.savedOptions);
+          st = await api("/api/status");
         } catch (e) {
           localStorage.removeItem("anyview_token");
         } finally {

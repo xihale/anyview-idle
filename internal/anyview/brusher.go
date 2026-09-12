@@ -1,5 +1,5 @@
 // 刷时长编排: 取目录 → 过滤已通过题 → 逐题「抽随机目标点 → 刷前检查(已在区间内则跳过)
-// → 错误注入(编译错/运行错, 数量可控) → WS 挂机到目标点 → 复核 accumTime 真涨了」。
+// → WS 挂机到目标点 → 复核 accumTime 真涨了 → 错误注入(编译错/运行错, 数量可控)」。
 // 区间语义: [lo,hi] 是每题 accumTime 的目标区间(分钟)。accum ≥ lo 即视为已达标跳过
 // (含高于 hi 的, 不会往回刷); 否则刷到区间内随机一点。计时器单活, 逐题串行。
 package anyview
@@ -21,6 +21,9 @@ const (
 	// 换题间隙, 仿人翻题节奏 (analysis/10)
 	gapMin = 8 * time.Second
 	gapMax = 23 * time.Second
+
+	maxHoldMin  = 180
+	maxInjectHi = 50
 )
 
 type BrushOptions struct {
@@ -163,11 +166,8 @@ func (m *Manager) Start(opts BrushOptions) error {
 	if m.run != nil {
 		return ErrAlreadyRunning
 	}
-	if opts.LoMin <= 0 || opts.HiMin < opts.LoMin {
-		return errors.New("时长区间不合法 (需 0 < 下限 ≤ 上限)")
-	}
-	if opts.InjectLo < 0 || opts.InjectHi < opts.InjectLo {
-		return errors.New("错误次数区间不合法 (需 0 ≤ 下限 ≤ 上限)")
+	if err := opts.validate(); err != nil {
+		return err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &run{opts: opts, client: m.client, ctx: ctx, cancel: cancel, mgr: m}
@@ -230,16 +230,19 @@ func (r *run) finish(err error) {
 	if err != nil {
 		r.status.Error = err.Error()
 	}
+	st := r.status
+	st.Log = append([]string(nil), r.log...)
 	r.mu.Unlock()
 	r.cancel()
 	r.mgr.mu.Lock()
-	if r.mgr.run == r {
+	fire := r.mgr.run == r
+	if fire {
 		r.mgr.run = nil
 	}
 	cb := r.mgr.onFinish
-	st := r.status
 	r.mgr.mu.Unlock()
-	if cb != nil {
+	// 被 SetSession 顶掉的旧 run 不再回调, 避免把新任务的 TaskRunning 写回 false
+	if fire && cb != nil {
 		go cb(st)
 	}
 }
@@ -257,12 +260,7 @@ func (r *run) exec() {
 		return
 	}
 	totalInCatalog := len(catalog)
-	if r.opts.Offset > 0 && r.opts.Offset < len(catalog) {
-		catalog = catalog[r.opts.Offset:]
-	}
-	if r.opts.Limit > 0 && len(catalog) > r.opts.Limit {
-		catalog = catalog[:r.opts.Limit]
-	}
+	catalog = clipCatalog(catalog, r.opts.Offset, r.opts.Limit)
 	var targets []CatalogItem
 	for _, q := range catalog {
 		if !q.Pass {
@@ -333,7 +331,7 @@ func (r *run) exec() {
 		err = r.timer.Hold(r.ctx, cur.EID, need)
 		r.clearCurrent()
 		if err != nil {
-			if errors.Is(err, context.Canceled) || r.ctx.Err() != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || r.ctx.Err() != nil {
 				r.logf("⏹ 已中止, %s 计时已停", cur.PName)
 				r.finish(nil)
 				return
@@ -346,6 +344,11 @@ func (r *run) exec() {
 			r.logf("  ✗ 挂机失败: %v", err)
 			r.bump(&r.status.Failed)
 			continue
+		}
+		if r.ctx.Err() != nil {
+			r.logf("⏹ 已中止, %s 本轮挂完即收尾", cur.PName)
+			r.finish(nil)
+			return
 		}
 
 		after, err := r.client.Catalog(r.ctx, r.opts.SchemeID, r.opts.ClassID)
@@ -360,10 +363,10 @@ func (r *run) exec() {
 				r.addGained(gained)
 				if gained > 0 {
 					r.logf("  ✓ accumTime %d → %ds (本轮 +%ds)", cur.AccumTime, afterItem.AccumTime, gained)
+					r.bump(&r.status.Done)
 				} else {
 					r.logf("  ⚠ accumTime 没涨 (+%d)——实验题(ES)服务端不计时属正常, 下一轮会按区间重判", gained)
 				}
-				r.bump(&r.status.Done)
 			}
 		}
 
@@ -375,11 +378,9 @@ func (r *run) exec() {
 
 		// 换题间隙, 仿人翻题节奏
 		gap := gapMin + time.Duration(rand.Float64()*(float64(gapMax-gapMin)))
-		select {
-		case <-r.ctx.Done():
+		if err := sleepCtx(r.ctx, gap); err != nil {
 			r.finish(nil)
 			return
-		case <-time.After(gap):
 		}
 	}
 	done, skipped, failed, gained, injected := func() (int, int, int, int64, int) {
@@ -439,6 +440,7 @@ func (r *run) clearCurrent() {
 //   - compile/runGroup 会顺带把提交代码覆盖到学生存档 (analysis/09 实测),
 //     所以注入前后必须快照/回写, 回写失败重试 3 次并大声告警;
 //   - 实验题(ES, questionType>=3)走另一套 Lab 编译接口, 普通接口打不了, 跳过注入。
+//
 // calcInjectCount 计算错误注入计划:
 // - 如果已有错误数已经在 [lo, hi] 区间内或已超过上限, 则跳过;
 // - 否则随机抽取目标 target ∈ [lo, hi], 计算需要补足的错误数 need = target - currentErrors。
@@ -544,7 +546,7 @@ func (r *run) injectErrors(q *CatalogItem) {
 				r.logf("    [%d/%d] – 残码意外编译过了 (cmpRight=%d), 不计入错误", i+1, need, cd.CmpRightCount)
 			}
 		}
-		sleepCtx(r.ctx, 2*time.Second+time.Duration(rand.Float64()*3*float64(time.Second)))
+		_ = sleepCtx(r.ctx, 2*time.Second+time.Duration(rand.Float64()*3*float64(time.Second)))
 	}
 	if injected > 0 {
 		r.mu.Lock()
@@ -635,9 +637,32 @@ func firstLine(s string) string {
 	return truncate(s, 120)
 }
 
-func sleepCtx(ctx context.Context, d time.Duration) {
-	select {
-	case <-ctx.Done():
-	case <-time.After(d):
+func (o BrushOptions) validate() error {
+	if o.SchemeID <= 0 || o.ClassID <= 0 {
+		return errors.New("缺少 schemeId 或 classId")
 	}
+	if o.LoMin <= 0 || o.HiMin < o.LoMin || o.HiMin > maxHoldMin {
+		return errors.New("时长区间不合法 (需 0 < 下限 ≤ 上限 ≤ 180)")
+	}
+	if o.InjectLo < 0 || o.InjectHi < o.InjectLo || o.InjectHi > maxInjectHi {
+		return errors.New("错误次数区间不合法 (需 0 ≤ 下限 ≤ 上限 ≤ 50)")
+	}
+	if o.Offset < 0 || o.Limit < 0 {
+		return errors.New("offset/limit 不能为负")
+	}
+	return nil
+}
+
+func clipCatalog(catalog []CatalogItem, offset, limit int) []CatalogItem {
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= len(catalog) {
+		return nil
+	}
+	catalog = catalog[offset:]
+	if limit > 0 && len(catalog) > limit {
+		catalog = catalog[:limit]
+	}
+	return catalog
 }

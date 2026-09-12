@@ -23,15 +23,23 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-var ErrKicked = errors.New("token 失效或账号被他处登录顶掉 (WS type=119), 请重新登录")
+var (
+	ErrKicked        = errors.New("token 失效或账号被他处登录顶掉 (WS type=119), 请重新登录")
+	errNeedReconnect = errors.New("ws need reconnect")
+)
+
+const wsWriteTimeout = 10 * time.Second
 
 type Timer struct {
 	client *Client
 	logf   func(format string, args ...any)
 
-	mu     sync.Mutex
-	conn   *websocket.Conn
-	hbStop chan struct{}
+	mu       sync.Mutex
+	writeMu  sync.Mutex
+	conn     *websocket.Conn
+	hbCancel context.CancelFunc
+
+	notify chan struct{} // 1-buffer, never closed; readPump/403/断线唤醒 Hold
 
 	open   atomic.Bool
 	kicked atomic.Bool
@@ -39,10 +47,33 @@ type Timer struct {
 }
 
 func NewTimer(client *Client, logf func(format string, args ...any)) *Timer {
-	return &Timer{client: client, logf: logf}
+	if logf == nil {
+		logf = func(string, ...any) {}
+	}
+	return &Timer{client: client, logf: logf, notify: make(chan struct{}, 1)}
 }
 
-func (t *Timer) send(conn *websocket.Conn, typ int, content any) error {
+func (t *Timer) signal() {
+	select {
+	case t.notify <- struct{}{}:
+	default:
+	}
+}
+
+func (t *Timer) drainSignals() {
+	for {
+		select {
+		case <-t.notify:
+		default:
+			return
+		}
+	}
+}
+
+func (t *Timer) sendConn(conn *websocket.Conn, typ int, content any) error {
+	if conn == nil {
+		return errors.New("WS 未连接")
+	}
 	msg, err := json.Marshal(map[string]any{
 		"type":      typ,
 		"content":   content,
@@ -52,16 +83,26 @@ func (t *Timer) send(conn *websocket.Conn, typ int, content any) error {
 	if err != nil {
 		return err
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.writeMu.Lock()
+	defer t.writeMu.Unlock()
+	_ = conn.SetWriteDeadline(time.Now().Add(wsWriteTimeout))
 	return conn.WriteMessage(websocket.TextMessage, msg)
 }
 
+func (t *Timer) currentConn() *websocket.Conn {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.conn
+}
+
 // Connect 建连并完成握手: 206 问考试安排 + 启动 40s 心跳。
+// 半死连接 (readPump 已退出但心跳还在) 会先 Close 再重拨, 避免双心跳。
 func (t *Timer) Connect(ctx context.Context) error {
-	if t.open.Load() {
+	if t.open.Load() && t.currentConn() != nil {
 		return nil
 	}
+	t.Close()
+
 	header := http.Header{}
 	header.Set("User-Agent", t.client.UA)
 	header.Set("Origin", BaseURL)
@@ -78,27 +119,40 @@ func (t *Timer) Connect(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("WS 握手失败: %w", err)
 	}
+
+	hbCtx, hbCancel := context.WithCancel(context.Background())
 	t.mu.Lock()
 	t.conn = conn
+	t.hbCancel = hbCancel
 	t.mu.Unlock()
 	t.open.Store(true)
 	t.stay.Store(false)
+	t.drainSignals()
 
 	go t.readPump(conn)
-	t.hbStop = make(chan struct{})
-	go t.heartbeat()
+	go t.heartbeat(hbCtx, conn)
 
-	if err := t.send(conn, 206, nil); err != nil {
+	if err := t.sendConn(conn, 206, nil); err != nil {
+		t.Close()
 		return err
 	}
 	return nil
 }
 
+func (t *Timer) noteDead(conn *websocket.Conn) {
+	t.mu.Lock()
+	if t.conn == conn {
+		t.open.Store(false)
+	}
+	t.mu.Unlock()
+	t.signal()
+}
+
 func (t *Timer) readPump(conn *websocket.Conn) {
+	defer t.noteDead(conn)
 	for {
 		_, data, err := conn.ReadMessage()
 		if err != nil {
-			t.open.Store(false)
 			return
 		}
 		var msg struct {
@@ -116,26 +170,22 @@ func (t *Timer) readPump(conn *websocket.Conn) {
 		if msg.StatusType != nil && *msg.StatusType == 403 {
 			t.stay.Store(true)
 			t.logf("⚠ 服务端提示停留过长 (statusType=403), 将断开重连续挂")
+			t.signal()
 		}
 	}
 }
 
-func (t *Timer) heartbeat() {
+func (t *Timer) heartbeat(ctx context.Context, conn *websocket.Conn) {
 	ticker := time.NewTicker(40 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
-		case <-t.hbStop:
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			t.mu.Lock()
-			conn := t.conn
-			t.mu.Unlock()
-			if conn == nil || !t.open.Load() {
-				continue
-			}
-			if err := t.send(conn, 117, nil); err != nil {
-				t.open.Store(false)
+			if err := t.sendConn(conn, 117, nil); err != nil {
+				t.noteDead(conn)
+				return
 			}
 		}
 	}
@@ -145,53 +195,90 @@ func (t *Timer) IsOpen() bool   { return t.open.Load() }
 func (t *Timer) IsKicked() bool { return t.kicked.Load() }
 
 func (t *Timer) StartTiming(eid int64) error {
-	t.mu.Lock()
-	conn := t.conn
-	t.mu.Unlock()
+	conn := t.currentConn()
 	if conn == nil {
 		return errors.New("WS 未连接")
 	}
-	return t.send(conn, 401, eid)
+	return t.sendConn(conn, 401, eid)
 }
 
 func (t *Timer) StopTiming() error {
-	t.mu.Lock()
-	conn := t.conn
-	t.mu.Unlock()
+	conn := t.currentConn()
 	if conn == nil {
 		return nil
 	}
-	return t.send(conn, 401, nil)
+	return t.sendConn(conn, 401, nil)
 }
 
 func (t *Timer) Close() {
-	if t.hbStop != nil {
-		select {
-		case <-t.hbStop:
-		default:
-			close(t.hbStop)
-		}
-	}
 	t.mu.Lock()
+	hbCancel := t.hbCancel
+	t.hbCancel = nil
 	conn := t.conn
 	t.conn = nil
 	t.mu.Unlock()
 	t.open.Store(false)
+	if hbCancel != nil {
+		hbCancel()
+	}
 	if conn != nil {
 		_ = conn.Close()
 	}
 }
 
-// Hold 给单题挂 minutes 分钟: 401 开始 → 20s 分片睡眠 → 断线/403 重连续挂剩余 → 401 停止。
+func (t *Timer) waitSlice(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+			return nil
+		case <-t.notify:
+			if t.kicked.Load() {
+				return ErrKicked
+			}
+			if !t.open.Load() || t.stay.Load() {
+				return errNeedReconnect
+			}
+		}
+	}
+}
+
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return ctx.Err()
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return ctx.Err()
+	}
+}
+
+// Hold 给单题挂 minutes 分钟: 401 开始 → 分片睡眠 → 断线/403 立刻重连续挂剩余 → 401 停止。
 // 计时器单活: 服务端同一时刻只记一题, 外层必须逐题串行调用。
-func (t *Timer) Hold(ctx context.Context, eid int64, minutes float64) error {
+// 任意返回路径都会 StopTiming+Close, 避免踢号/取消后连接与心跳泄漏。
+func (t *Timer) Hold(ctx context.Context, eid int64, minutes float64) (err error) {
+	if minutes < 0 {
+		minutes = 0
+	}
+	defer func() {
+		if !errors.Is(err, ErrKicked) {
+			_ = t.StopTiming()
+		}
+		t.Close()
+	}()
+
 	if t.kicked.Load() {
 		return ErrKicked
 	}
-	if !t.open.Load() {
-		if err := t.Connect(ctx); err != nil {
-			return err
-		}
+	if err := t.Connect(ctx); err != nil {
+		return err
 	}
 	if err := t.StartTiming(eid); err != nil {
 		return err
@@ -204,28 +291,33 @@ func (t *Timer) Hold(ctx context.Context, eid int64, minutes float64) error {
 		if remain < step {
 			step = remain
 		}
-		select {
-		case <-ctx.Done():
-			_ = t.StopTiming()
-			t.Close()
-			return ctx.Err()
-		case <-time.After(step):
+		started := time.Now()
+		waitErr := t.waitSlice(ctx, step)
+		elapsed := time.Since(started)
+		if elapsed >= remain {
+			remain = 0
+		} else {
+			remain -= elapsed
 		}
-		remain -= step
-		if remain <= 0 {
-			break
-		}
-		if t.kicked.Load() {
+
+		switch {
+		case waitErr == nil:
+			continue
+		case errors.Is(waitErr, context.Canceled), errors.Is(waitErr, context.DeadlineExceeded):
+			return waitErr
+		case errors.Is(waitErr, ErrKicked):
 			return ErrKicked
-		}
-		// 断线或服务端要求重连(403) → 仿前端: 断开重连后重发 401 续计时
-		if !t.open.Load() || t.stay.Load() {
+		case errors.Is(waitErr, errNeedReconnect):
+			if remain <= 0 {
+				break
+			}
+			if t.kicked.Load() {
+				return ErrKicked
+			}
 			wasStay := t.stay.Load()
 			t.Close()
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(3 * time.Second):
+			if err := sleepCtx(ctx, 3*time.Second); err != nil {
+				return err
 			}
 			if err := t.Connect(ctx); err != nil {
 				return err
@@ -238,12 +330,13 @@ func (t *Timer) Hold(ctx context.Context, eid int64, minutes float64) error {
 			} else {
 				t.logf("  ⚠ WS 断开, 重连续挂剩余 %.1f 分钟", remain.Minutes())
 			}
+		default:
+			return waitErr
 		}
 	}
-	if err := t.StopTiming(); err != nil {
-		t.logf("  ⚠ 停止计时消息发送失败: %v", err)
+	_ = t.StopTiming()
+	if err := sleepCtx(ctx, 2*time.Second); err != nil {
+		return err
 	}
-	time.Sleep(2 * time.Second)
-	t.Close()
 	return nil
 }

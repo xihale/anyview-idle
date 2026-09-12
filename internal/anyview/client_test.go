@@ -3,6 +3,7 @@ package anyview
 import (
 	"encoding/json"
 	"testing"
+	"unicode/utf8"
 )
 
 func coursesFrom(t *testing.T, payload string) []Course {
@@ -86,6 +87,17 @@ func TestNormalizeCourses_SchemeListRows(t *testing.T) {
 	}
 	if got[0].CourseName != "数据结构(C语言版)(计算机)-2026秋" {
 		t.Errorf("应优先用全名 name: %+v", got[0])
+	}
+}
+
+func TestTruncateUTF8Boundary(t *testing.T) {
+	s := "你好世界" // 每字 3 bytes
+	got := truncate(s, 4)
+	if got[len(got)-len("…"):] != "…" {
+		t.Fatalf("应带省略号, got %q", got)
+	}
+	if !utf8.ValidString(got[:len(got)-len("…")]) {
+		t.Fatalf("截断不应切开 rune, got %q", got)
 	}
 }
 
