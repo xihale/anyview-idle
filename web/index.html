@@ -1,0 +1,1666 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#FAF7F2">
+<title>anyview-idle</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%23FAF7F2'/%3E%3Ccircle cx='8' cy='8' r='4' fill='%23C85A32'/%3E%3C/svg%3E">
+<style>
+  @font-face {
+    font-family: "Fragment Mono";
+    src: url("fonts/fragment-mono-latin.woff2") format("woff2");
+    font-display: swap;
+    unicode-range: U+0000-00FF, U+2013-2014, U+2192;
+  }
+
+  :root {
+    color-scheme: light;
+    --canvas: #FAF7F2;
+    --surface: #FFFFFF;
+    --surface-sub: #F4EDE3;
+    --surface-hover: #ECE3D7;
+    --hairline: #E8DFD3;
+    --hairline-dark: #D4C9BC;
+    --espresso: #201B17;
+    --slate: #635C54;
+    --caption: #9C9388;
+    --terracotta: #C85A32;
+    --terracotta-soft: rgba(200, 90, 50, 0.10);
+    --terracotta-hover: #B54D28;
+    --sage: #4A6B53;
+    --sage-soft: rgba(74, 107, 83, 0.12);
+    --amber: #C4883B;
+    --amber-soft: rgba(196, 136, 59, 0.12);
+    --red: #C93B2B;
+    --red-soft: rgba(201, 59, 43, 0.10);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-full: 9999px;
+    --font-mono: "Fragment Mono", ui-monospace, Menlo, Consolas, monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    min-height: 100vh;
+    background-color: var(--canvas);
+    color: var(--espresso);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    display: flex;
+    flex-direction: column;
+    padding: 0 16px 40px;
+  }
+
+  ::selection {
+    background: var(--terracotta);
+    color: #FFFFFF;
+  }
+
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+
+  .app-container {
+    max-width: 620px;
+    width: 100%;
+    margin: 0 auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* 顶栏 */
+  header.topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 2px 16px;
+    border-bottom: 1px solid var(--hairline);
+    margin-bottom: 20px;
+  }
+
+  .brand-name {
+    font-family: var(--font-mono);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--espresso);
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 12px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--slate);
+    transition: all 0.2s ease;
+  }
+  .status-pill .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--caption);
+    flex-shrink: 0;
+  }
+  .status-pill.running {
+    border-color: rgba(74, 107, 83, 0.3);
+    background: var(--sage-soft);
+    color: var(--sage);
+  }
+  .status-pill.running .dot {
+    background: var(--sage);
+    box-shadow: 0 0 0 3px rgba(74, 107, 83, 0.2);
+    animation: calm-pulse 2.4s ease-in-out infinite;
+  }
+  .status-pill.waiting {
+    border-color: rgba(196, 136, 59, 0.3);
+    background: var(--amber-soft);
+    color: var(--amber);
+  }
+  .status-pill.waiting .dot {
+    background: var(--amber);
+  }
+  .status-pill.error {
+    border-color: rgba(201, 59, 43, 0.3);
+    background: var(--red-soft);
+    color: var(--red);
+  }
+  .status-pill.error .dot {
+    background: var(--red);
+  }
+
+  @keyframes calm-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.45; transform: scale(0.92); }
+  }
+
+  .user-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+    background: var(--surface-sub);
+    font-size: 12px;
+    color: var(--espresso);
+    font-weight: 500;
+  }
+  .user-badge button.logout-btn {
+    border: none;
+    background: transparent;
+    color: var(--caption);
+    cursor: pointer;
+    padding: 0 2px;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+  }
+  .user-badge button.logout-btn:hover {
+    color: var(--terracotta);
+  }
+
+  /* 视图切换 */
+  .stage-view {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    animation: fade-enter 0.15s ease-out;
+  }
+  .stage-view[hidden] {
+    display: none !important;
+  }
+
+  @keyframes fade-enter {
+    from {
+      opacity: 0;
+      transform: translateY(2px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* 瑞士极简卡片 */
+  .swiss-card {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--espresso);
+  }
+
+  /* 手动数字输入与范围徽章 */
+  .range-inputs-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--surface-sub);
+    padding: 3px 8px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--hairline);
+  }
+  .range-prefix, .range-sep {
+    font-size: 12px;
+    color: var(--caption);
+    font-weight: 500;
+  }
+  .range-unit {
+    font-size: 12px;
+    color: var(--slate);
+    font-weight: 500;
+  }
+  .range-total-badge {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--slate);
+    background: var(--surface-sub);
+    border: 1px solid var(--hairline);
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+  }
+  .range-num-input {
+    width: 52px;
+    padding: 3px 2px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--espresso);
+    text-align: center;
+    outline: none;
+    transition: all 0.15s ease;
+    -moz-appearance: textfield;
+  }
+  .range-num-input::-webkit-outer-spin-button,
+  .range-num-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .range-num-input:focus {
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 2px var(--terracotta-soft);
+    color: var(--terracotta);
+    background: #FFFFFF;
+  }
+
+  /* 双端点滑轨 */
+  .dual-slider-container {
+    position: relative;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    user-select: none;
+    touch-action: none;
+    cursor: pointer;
+    padding: 0 4px;
+  }
+
+  .dual-slider-track {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 6px;
+    background: var(--surface-sub);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+  }
+
+  .dual-slider-range {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: var(--terracotta);
+    border-radius: var(--radius-full);
+    pointer-events: none;
+  }
+
+  .slider-handle {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 22px;
+    height: 22px;
+    background: var(--surface);
+    border: 2.5px solid var(--terracotta);
+    border-radius: 50%;
+    cursor: grab;
+    z-index: 2;
+    box-shadow: 0 1px 4px rgba(32, 27, 23, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+  }
+  .slider-handle::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--terracotta);
+  }
+  .slider-handle:hover {
+    transform: translate(-50%, -50%) scale(1.12);
+    box-shadow: 0 2px 8px rgba(200, 90, 50, 0.25);
+  }
+  .slider-handle:active {
+    cursor: grabbing;
+    transform: translate(-50%, -50%) scale(1.18);
+  }
+  .slider-handle:focus-visible {
+    outline: 2px solid var(--espresso);
+    outline-offset: 2px;
+  }
+
+  .slider-scale-row {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--caption);
+    padding: 0 2px;
+  }
+
+
+  /* 表单与输入 */
+  .select-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .select-wrapper {
+    position: relative;
+    flex: 1;
+  }
+  select.swiss-select {
+    width: 100%;
+    appearance: none;
+    -webkit-appearance: none;
+    padding: 10px 36px 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-md);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--espresso);
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+  }
+  select.swiss-select:focus {
+    border-color: var(--espresso);
+  }
+  .select-arrow {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: var(--slate);
+  }
+
+  .input-field {
+    width: 100%;
+    padding: 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-md);
+    font-family: inherit;
+    font-size: 14px;
+    color: var(--espresso);
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+  .input-field:focus {
+    border-color: var(--espresso);
+  }
+  .input-field::placeholder {
+    color: var(--caption);
+  }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 24px;
+    background: var(--terracotta);
+    color: #FFFFFF;
+    border: none;
+    border-radius: var(--radius-md);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--terracotta-hover);
+  }
+  .btn-primary:active:not(:disabled) {
+    transform: scale(0.99);
+  }
+  .btn-primary:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: var(--surface-sub);
+    color: var(--espresso);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-md);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background: var(--surface-hover);
+  }
+
+  .btn-stop {
+    background: var(--surface);
+    border: 1.5px solid var(--red);
+    color: var(--red);
+    border-radius: var(--radius-md);
+    padding: 10px 20px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+  }
+  .btn-stop:hover:not(:disabled) {
+    background: var(--red-soft);
+  }
+
+  /* 登录卡片 */
+  .login-card {
+    max-width: 400px;
+    margin: 40px auto 0;
+    width: 100%;
+  }
+  .login-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    background: var(--surface-sub);
+    padding: 4px;
+    border-radius: var(--radius-md);
+    margin-bottom: 6px;
+  }
+  .tab-btn {
+    padding: 8px 14px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--slate);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .tab-btn.active {
+    background: var(--surface);
+    color: var(--espresso);
+    font-weight: 600;
+  }
+
+  /* 运行态仪表 */
+  .question-badge-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .chap-pill {
+    padding: 2px 8px;
+    background: var(--surface-sub);
+    border-radius: var(--radius-full);
+    font-size: 12px;
+    color: var(--slate);
+  }
+  .eid-pill {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--caption);
+  }
+
+  .question-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--espresso);
+  }
+
+  .gauge-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    background: var(--canvas);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-lg);
+    padding: 18px 22px;
+  }
+
+  .dial-wrapper {
+    position: relative;
+    width: 88px;
+    height: 88px;
+    flex-shrink: 0;
+  }
+  .dial-svg {
+    width: 88px;
+    height: 88px;
+    display: block;
+    overflow: visible;
+  }
+  .dial-track {
+    fill: transparent;
+    stroke: var(--surface-sub);
+    stroke-width: 8;
+  }
+  .dial-bar {
+    fill: transparent;
+    stroke: var(--terracotta);
+    stroke-width: 8;
+    stroke-linecap: round;
+    stroke-dasharray: 238.76;
+    stroke-dashoffset: 238.76;
+    transition: stroke-dashoffset 0.3s ease, opacity 0.2s ease;
+  }
+  .dial-center-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .dial-pct {
+    font-family: var(--font-mono);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--espresso);
+  }
+
+  .time-stat-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .time-huge {
+    font-family: var(--font-mono);
+    font-size: clamp(32px, 6vw, 42px);
+    font-weight: 600;
+    color: var(--espresso);
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+  .time-target-sub {
+    font-size: 13px;
+    color: var(--slate);
+    margin-top: 6px;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .time-target-sub strong {
+    color: var(--terracotta);
+    font-family: var(--font-mono);
+  }
+
+  /* 4联指标 */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .metric-cell {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .metric-title {
+    font-size: 11px;
+    color: var(--caption);
+  }
+  .metric-num {
+    font-family: var(--font-mono);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--espresso);
+  }
+  .metric-num.highlight {
+    color: var(--terracotta);
+  }
+
+  /* 运行态日志 (首页不显示) */
+  details.log-card {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  summary.log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 18px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--slate);
+    list-style: none;
+  }
+  summary.log-header::-webkit-details-marker {
+    display: none;
+  }
+  summary.log-header:hover {
+    color: var(--espresso);
+  }
+
+  .log-action-btn {
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--hairline);
+    background: transparent;
+    font-size: 11px;
+    color: var(--caption);
+    cursor: pointer;
+  }
+  .log-action-btn:hover {
+    color: var(--espresso);
+    border-color: var(--espresso);
+  }
+
+  .log-body {
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 12px 16px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.8;
+    color: var(--slate);
+    white-space: pre-wrap;
+    word-break: break-all;
+    border-top: 1px solid var(--hairline);
+    background: #FCFAF7;
+    contain: content;
+    scrollbar-width: thin;
+    scrollbar-color: var(--hairline-dark) transparent;
+  }
+  .log-body::-webkit-scrollbar {
+    width: 4px;
+  }
+  .log-body::-webkit-scrollbar-thumb {
+    background: var(--hairline-dark);
+  }
+
+  .error-banner {
+    padding: 10px 14px;
+    background: var(--red-soft);
+    border: 1px solid rgba(201, 59, 43, 0.2);
+    border-radius: var(--radius-md);
+    color: var(--red);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .error-banner[hidden] {
+    display: none !important;
+  }
+
+  @media (max-width: 520px) {
+    body { padding: 0 12px 28px; }
+    .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    .gauge-box { flex-direction: column; text-align: center; }
+    .time-target-sub { justify-content: center; }
+  }
+</style>
+</head>
+<body>
+<div class="app-container">
+  <!-- 顶栏 -->
+  <header class="topbar">
+    <span class="brand-name">anyview-idle</span>
+    <div class="header-actions">
+      <div class="user-badge" id="userBadge" hidden>
+        <span id="userName">用户</span>
+        <button class="logout-btn" id="logoutBtn" title="退出登录">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3M10 12l4-4-4-4M14 8H5"/></svg>
+        </button>
+      </div>
+      <div class="status-pill" id="statusPill">
+        <i class="dot"></i>
+        <span id="statusText">未连接</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="error-banner" id="globalError" hidden>
+    <span id="errorMsg"></span>
+  </div>
+
+  <!-- 刻一: 登录面板 -->
+  <main class="stage-view" id="viewLogin" hidden>
+    <div class="swiss-card login-card">
+      <div class="card-header">
+        <span class="card-title">登录</span>
+      </div>
+
+      <div class="login-tabs">
+        <button type="button" class="tab-btn active" id="tabPwd">密码</button>
+        <button type="button" class="tab-btn" id="tabToken">Token</button>
+      </div>
+
+      <form id="loginForm" style="display:flex; flex-direction:column; gap:14px;">
+        <div id="pwdFields" style="display:flex; flex-direction:column; gap:12px;">
+          <div><input class="input-field" id="username" autocomplete="username" placeholder="学号"></div>
+          <div><input class="input-field" id="password" type="password" autocomplete="current-password" placeholder="密码"></div>
+        </div>
+
+        <div id="tokenFields" style="display:none; flex-direction:column; gap:12px;">
+          <div><input class="input-field" id="token" placeholder="Token"></div>
+        </div>
+
+        <details style="font-size:12px; color:var(--caption);">
+          <summary style="cursor:pointer; user-select:none; margin-bottom:6px;">X-Forwarded-For</summary>
+          <input class="input-field" id="xff" placeholder="直连源站时填写">
+        </details>
+
+        <button type="submit" class="btn-primary" id="loginBtn" style="margin-top:4px;">
+          <span>登录</span>
+        </button>
+      </form>
+    </div>
+  </main>
+
+  <!-- 刻二: 运行中视觉监控 -->
+  <main class="stage-view" id="viewRun" hidden>
+    <div class="swiss-card">
+      <div class="question-badge-row">
+        <span class="chap-pill" id="runChapter">-</span>
+        <span class="eid-pill" id="runEid">-</span>
+      </div>
+
+      <h1 class="question-title" id="runQName">-</h1>
+
+      <div class="gauge-box">
+        <div class="dial-wrapper">
+          <svg class="dial-svg" viewBox="0 0 88 88">
+            <circle class="dial-track" cx="44" cy="44" r="38" />
+            <circle class="dial-bar" id="dialBar" cx="44" cy="44" r="38" transform="rotate(-90 44 44)" />
+          </svg>
+          <div class="dial-center-text">
+            <span class="dial-pct tnum" id="dialPct">0%</span>
+          </div>
+        </div>
+
+        <div class="time-stat-col">
+          <div class="time-huge tnum" id="runCurMin">0.0</div>
+          <div class="time-target-sub">
+            <span>目标</span>
+            <strong id="runTargetMin">--</strong>
+            <span style="color:var(--caption); margin-left:4px;" id="runRemaining"></span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end;">
+        <button type="button" class="btn-stop" id="stopBtn">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="10" height="10" rx="2"/></svg>
+          停止
+        </button>
+      </div>
+    </div>
+
+    <!-- 4联数据 -->
+    <div class="metrics-grid">
+      <div class="metric-cell">
+        <span class="metric-title">完成</span>
+        <span class="metric-num tnum" id="mDone">0</span>
+      </div>
+      <div class="metric-cell">
+        <span class="metric-title">跳过</span>
+        <span class="metric-num tnum" id="mSkipped">0</span>
+      </div>
+      <div class="metric-cell">
+        <span class="metric-title">错误</span>
+        <span class="metric-num tnum" id="mErrors">0</span>
+      </div>
+      <div class="metric-cell">
+        <span class="metric-title">涨幅</span>
+        <span class="metric-num tnum highlight" id="mGained">0.0m</span>
+      </div>
+    </div>
+
+    <!-- 日志 (仅运行态呈现，首页无日志) -->
+    <details class="log-card" id="logBox" open>
+      <summary class="log-header">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span>日志</span>
+          <span class="user-badge" id="logCountBadge" style="padding:1px 6px; font-size:11px;">0</span>
+        </div>
+        <div class="log-actions" onclick="event.stopPropagation()">
+          <button type="button" class="log-action-btn" id="copyLogBtn">复制</button>
+        </div>
+      </summary>
+      <div class="log-body" id="logContent"></div>
+    </details>
+  </main>
+
+  <!-- 刻三: 配置面板 (首页) -->
+  <main class="stage-view" id="viewCfg" hidden>
+    <form id="cfgForm" class="stage-view">
+      <!-- 课程 -->
+      <div class="swiss-card">
+        <div class="card-header">
+          <span class="card-title">课程</span>
+          <button type="button" class="btn-secondary" id="refreshBtn">刷新</button>
+        </div>
+        <div class="select-row">
+          <div class="select-wrapper">
+            <select class="swiss-select" id="course" required></select>
+            <div class="select-arrow">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6l5 5 5-5"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 时长 (双端点滑轨) -->
+      <div class="swiss-card">
+        <div class="card-header">
+          <span class="card-title">时长</span>
+          <div class="range-inputs-group">
+            <input type="number" class="range-num-input tnum" id="inputLoDuration" step="0.5" min="0.5" max="30" value="5.0">
+            <span class="range-sep">–</span>
+            <input type="number" class="range-num-input tnum" id="inputHiDuration" step="0.5" min="0.5" max="30" value="10.0">
+            <span class="range-unit">分钟</span>
+          </div>
+        </div>
+        <div class="dual-slider-container" id="sliderContainerDuration">
+          <div class="dual-slider-track">
+            <div class="dual-slider-range" id="sliderRangeDuration"></div>
+          </div>
+          <div class="slider-handle" id="thumbLoDuration" tabindex="0"></div>
+          <div class="slider-handle" id="thumbHiDuration" tabindex="0"></div>
+        </div>
+        <div class="slider-scale-row">
+          <span>0.5m</span>
+          <span>10m</span>
+          <span>20m</span>
+          <span>30m</span>
+        </div>
+      </div>
+
+      <!-- 错误注入 (双端点滑轨) -->
+      <div class="swiss-card">
+        <div class="card-header">
+          <span class="card-title">错误注入</span>
+          <div class="range-inputs-group">
+            <input type="number" class="range-num-input tnum" id="inputLoInject" step="1" min="0" max="10" value="1" style="width:44px;">
+            <span class="range-sep">–</span>
+            <input type="number" class="range-num-input tnum" id="inputHiInject" step="1" min="0" max="10" value="3" style="width:44px;">
+            <span class="range-unit">次</span>
+          </div>
+        </div>
+        <div class="dual-slider-container" id="sliderContainerInject">
+          <div class="dual-slider-track">
+            <div class="dual-slider-range" id="sliderRangeInject"></div>
+          </div>
+          <div class="slider-handle" id="thumbLoInject" tabindex="0"></div>
+          <div class="slider-handle" id="thumbHiInject" tabindex="0"></div>
+        </div>
+        <div class="slider-scale-row">
+          <span>0</span>
+          <span>2</span>
+          <span>4</span>
+          <span>6</span>
+          <span>8</span>
+          <span>10</span>
+        </div>
+      </div>
+
+      <!-- 刷题范围 (双端点滑轨，动态完整范围与手动题号输入) -->
+      <div class="swiss-card">
+        <div class="card-header">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="card-title">刷题范围</span>
+            <span class="range-total-badge" id="totalQuestionsBadge">共 -- 题</span>
+          </div>
+          <div class="range-inputs-group">
+            <span class="range-prefix">第</span>
+            <input type="number" class="range-num-input tnum" id="inputLoLimit" step="1" min="1" max="1" value="1">
+            <span class="range-sep">至</span>
+            <input type="number" class="range-num-input tnum" id="inputHiLimit" step="1" min="1" max="1" value="1">
+            <span class="range-unit">题</span>
+          </div>
+        </div>
+        <div class="dual-slider-container" id="sliderContainerLimit">
+          <div class="dual-slider-track">
+            <div class="dual-slider-range" id="sliderRangeLimit"></div>
+          </div>
+          <div class="slider-handle" id="thumbLoLimit" tabindex="0"></div>
+          <div class="slider-handle" id="thumbHiLimit" tabindex="0"></div>
+        </div>
+        <div class="slider-scale-row" id="scaleRowLimit">
+          <span id="scaleMinLimit">1</span>
+          <span id="scaleMidLimit">--</span>
+          <span id="scaleMaxLimit">--</span>
+        </div>
+      </div>
+
+      <!-- 开始 -->
+      <button type="submit" class="btn-primary" id="startBtn" style="padding:14px; font-size:15px; border-radius:var(--radius-lg);">
+        <span>开始</span>
+      </button>
+    </form>
+  </main>
+</div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const min1 = (v) => (Math.round((v || 0) * 10) / 10).toFixed(1);
+
+let who = "";
+let curPoll = null;
+let lastLogLen = 0;
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  let body = {};
+  try { body = await res.json(); } catch {}
+  if (!res.ok) throw new Error(body.error || ("HTTP " + res.status));
+  return body;
+}
+
+function setGlobalError(msg) {
+  const box = $("globalError");
+  if (!msg) {
+    box.hidden = true;
+    return;
+  }
+  $("errorMsg").textContent = msg;
+  box.hidden = false;
+}
+
+function showStage(stage) {
+  $("viewLogin").hidden = stage !== "login";
+  $("viewRun").hidden = stage !== "run";
+  $("viewCfg").hidden = stage !== "cfg";
+  try {
+    localStorage.setItem("anyview_last_stage", stage);
+  } catch {}
+}
+
+/* 登录选项卡 */
+$("tabPwd").addEventListener("click", () => {
+  $("tabPwd").classList.add("active");
+  $("tabToken").classList.remove("active");
+  $("pwdFields").style.display = "flex";
+  $("tokenFields").style.display = "none";
+});
+
+$("tabToken").addEventListener("click", () => {
+  $("tabToken").classList.add("active");
+  $("tabPwd").classList.remove("active");
+  $("tokenFields").style.display = "flex";
+  $("pwdFields").style.display = "none";
+});
+
+$("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setGlobalError("");
+  const btn = $("loginBtn");
+  btn.disabled = true;
+
+  try {
+    const isToken = $("tabToken").classList.contains("active");
+    const payload = {
+      username: isToken ? "" : $("username").value.trim(),
+      password: isToken ? "" : $("password").value,
+      token: isToken ? $("token").value.trim() : "",
+      xff: $("xff").value.trim(),
+    };
+    const body = await api("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    who = (body.student && (body.student.name || body.student.id)) || "在线学员";
+    if (body.token) {
+      localStorage.setItem("anyview_token", body.token);
+    }
+    if (payload.xff) {
+      localStorage.setItem("anyview_xff", payload.xff);
+    }
+    hasInitialLoadedCourses = true;
+    fillCourses(body.courses || []);
+    renderStatus(curPoll || { running: false, authenticated: true });
+  } catch (err) {
+    setGlobalError(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$("logoutBtn").addEventListener("click", async () => {
+  who = "";
+  localStorage.removeItem("anyview_token");
+  try { await api("/api/logout", { method: "POST" }); } catch {}
+  setGlobalError("");
+  hasInitialLoadedCourses = false;
+  renderStatus({ running: false, authenticated: false });
+});
+
+/* 通用双端点滑动条工厂 (双向绑定手动数字输入框) */
+function createDualSlider({
+  containerId,
+  rangeId,
+  thumbLoId,
+  thumbHiId,
+  inputLoId,
+  inputHiId,
+  min,
+  max,
+  step,
+  defaultLo,
+  defaultHi,
+  decimals = 0,
+  onChange
+}) {
+  let curMin = min;
+  let curMax = max;
+  let curStep = step;
+  let valLo = defaultLo;
+  let valHi = defaultHi;
+
+  const container = $(containerId);
+  const range = $(rangeId);
+  const thumbLo = $(thumbLoId);
+  const thumbHi = $(thumbHiId);
+  const inputLo = $(inputLoId);
+  const inputHi = $(inputHiId);
+
+  function valToPct(v) {
+    if (curMax <= curMin) return 0;
+    return ((v - curMin) / (curMax - curMin)) * 100;
+  }
+
+  function pctToVal(pct) {
+    const raw = curMin + (pct / 100) * (curMax - curMin);
+    const stepped = Math.round((raw - curMin) / curStep) * curStep + curMin;
+    return Math.min(curMax, Math.max(curMin, stepped));
+  }
+
+  function formatVal(v) {
+    return decimals > 0 ? v.toFixed(decimals) : String(Math.round(v));
+  }
+
+  function syncInputs() {
+    if (inputLo && document.activeElement !== inputLo) {
+      inputLo.value = formatVal(valLo);
+    }
+    if (inputHi && document.activeElement !== inputHi) {
+      inputHi.value = formatVal(valHi);
+    }
+  }
+
+  function updateUI(skipInputs = false) {
+    const pctLo = valToPct(valLo);
+    const pctHi = valToPct(valHi);
+
+    thumbLo.style.left = pctLo + "%";
+    thumbHi.style.left = pctHi + "%";
+    range.style.left = pctLo + "%";
+    range.style.width = Math.max(0, pctHi - pctLo) + "%";
+
+    if (!skipInputs) syncInputs();
+
+    if (onChange) onChange(valLo, valHi);
+  }
+
+  function setupThumb(thumb, isMin) {
+    thumb.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      thumb.setPointerCapture(e.pointerId);
+      thumbLo.style.zIndex = isMin ? "3" : "2";
+      thumbHi.style.zIndex = isMin ? "2" : "3";
+
+      const onMove = (ev) => {
+        const rect = container.getBoundingClientRect();
+        const pct = Math.max(0, Math.min(100, ((ev.clientX - rect.left) / rect.width) * 100));
+        const target = pctToVal(pct);
+        if (isMin) {
+          if (target > valHi) {
+            valLo = valHi;
+          } else {
+            valLo = Math.max(curMin, target);
+          }
+        } else {
+          if (target < valLo) {
+            valHi = valLo;
+          } else {
+            valHi = Math.min(curMax, target);
+          }
+        }
+        updateUI();
+      };
+
+      const onUp = (ev) => {
+        thumb.releasePointerCapture(ev.pointerId);
+        thumb.removeEventListener("pointermove", onMove);
+        thumb.removeEventListener("pointerup", onUp);
+      };
+
+      thumb.addEventListener("pointermove", onMove);
+      thumb.addEventListener("pointerup", onUp);
+    });
+
+    thumb.addEventListener("keydown", (e) => {
+      let delta = 0;
+      if (e.key === "ArrowLeft" || e.key === "ArrowDown") delta = -curStep;
+      if (e.key === "ArrowRight" || e.key === "ArrowUp") delta = curStep;
+      if (delta !== 0) {
+        e.preventDefault();
+        if (isMin) {
+          valLo = Math.max(curMin, Math.min(valHi, valLo + delta));
+        } else {
+          valHi = Math.max(valLo, Math.min(curMax, valHi + delta));
+        }
+        updateUI();
+      }
+    });
+  }
+
+  setupThumb(thumbLo, true);
+  setupThumb(thumbHi, false);
+
+  container.addEventListener("pointerdown", (e) => {
+    if (e.target === thumbLo || e.target === thumbHi) return;
+    const rect = container.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+    const clicked = pctToVal(pct);
+    const distLo = Math.abs(clicked - valLo);
+    const distHi = Math.abs(clicked - valHi);
+    if (distLo < distHi || (distLo === distHi && clicked < valLo)) {
+      valLo = Math.max(curMin, Math.min(valHi, clicked));
+      thumbLo.style.zIndex = "3";
+      thumbHi.style.zIndex = "2";
+    } else {
+      valHi = Math.min(curMax, Math.max(valLo, clicked));
+      thumbHi.style.zIndex = "3";
+      thumbLo.style.zIndex = "2";
+    }
+    updateUI();
+  });
+
+  /* 双向绑定：手动输入监听 */
+  if (inputLo) {
+    inputLo.addEventListener("input", () => {
+      let parsed = parseFloat(inputLo.value);
+      if (isNaN(parsed)) return;
+      parsed = Math.max(curMin, Math.min(curMax, parsed));
+      if (parsed > valHi) {
+        valHi = parsed;
+      }
+      valLo = parsed;
+      updateUI(true);
+    });
+
+    const commitLo = () => {
+      let parsed = parseFloat(inputLo.value);
+      if (isNaN(parsed)) parsed = valLo;
+      parsed = Math.round((parsed - curMin) / curStep) * curStep + curMin;
+      parsed = Math.max(curMin, Math.min(curMax, parsed));
+      if (parsed > valHi) {
+        valHi = parsed;
+      }
+      valLo = parsed;
+      updateUI(false);
+    };
+    inputLo.addEventListener("blur", commitLo);
+    inputLo.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); inputLo.blur(); } });
+  }
+
+  if (inputHi) {
+    inputHi.addEventListener("input", () => {
+      let parsed = parseFloat(inputHi.value);
+      if (isNaN(parsed)) return;
+      parsed = Math.max(curMin, Math.min(curMax, parsed));
+      if (parsed < valLo) {
+        valLo = parsed;
+      }
+      valHi = parsed;
+      updateUI(true);
+    });
+
+    const commitHi = () => {
+      let parsed = parseFloat(inputHi.value);
+      if (isNaN(parsed)) parsed = valHi;
+      parsed = Math.round((parsed - curMin) / curStep) * curStep + curMin;
+      parsed = Math.max(curMin, Math.min(curMax, parsed));
+      if (parsed < valLo) {
+        valLo = parsed;
+      }
+      valHi = parsed;
+      updateUI(false);
+    };
+    inputHi.addEventListener("blur", commitHi);
+    inputHi.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); inputHi.blur(); } });
+  }
+
+  updateUI();
+
+  return {
+    getLo: () => valLo,
+    getHi: () => valHi,
+    getMax: () => curMax,
+    setValues: (lo, hi) => {
+      valLo = Math.max(curMin, Math.min(curMax, lo));
+      valHi = Math.max(valLo, Math.min(curMax, hi));
+      updateUI();
+    },
+    setMax: (newMax) => {
+      curMax = Math.max(curMin, newMax);
+      if (inputLo) { inputLo.min = curMin; inputLo.max = curMax; }
+      if (inputHi) { inputHi.min = curMin; inputHi.max = curMax; }
+      valLo = Math.max(curMin, Math.min(curMax, valLo));
+      valHi = Math.max(valLo, Math.min(curMax, curMax));
+      updateUI();
+    }
+  };
+}
+
+/* 实例化 3 个滑动条 */
+const sliderDuration = createDualSlider({
+  containerId: "sliderContainerDuration",
+  rangeId: "sliderRangeDuration",
+  thumbLoId: "thumbLoDuration",
+  thumbHiId: "thumbHiDuration",
+  inputLoId: "inputLoDuration",
+  inputHiId: "inputHiDuration",
+  min: 0.5,
+  max: 30.0,
+  step: 0.5,
+  defaultLo: 5.0,
+  defaultHi: 10.0,
+  decimals: 1,
+});
+
+const sliderInject = createDualSlider({
+  containerId: "sliderContainerInject",
+  rangeId: "sliderRangeInject",
+  thumbLoId: "thumbLoInject",
+  thumbHiId: "thumbHiInject",
+  inputLoId: "inputLoInject",
+  inputHiId: "inputHiInject",
+  min: 0,
+  max: 10,
+  step: 1,
+  defaultLo: 1,
+  defaultHi: 3,
+  decimals: 0,
+});
+
+const sliderLimit = createDualSlider({
+  containerId: "sliderContainerLimit",
+  rangeId: "sliderRangeLimit",
+  thumbLoId: "thumbLoLimit",
+  thumbHiId: "thumbHiLimit",
+  inputLoId: "inputLoLimit",
+  inputHiId: "inputHiLimit",
+  min: 1,
+  max: 1,
+  step: 1,
+  defaultLo: 1,
+  defaultHi: 1,
+  decimals: 0,
+});
+
+/* 课程更新 (黑名单过滤「实验」，支持恢复上次保存的课程与题号范围) */
+function fillCourses(courses, savedOpts) {
+  const valid = (courses || []).filter(c => !c.courseName.includes("实验"));
+  const sel = $("course");
+  sel.innerHTML = "";
+  if (!valid.length) {
+    sel.innerHTML = '<option value="">无可用课程 (已过滤实验)</option>';
+    $("startBtn").disabled = true;
+    return;
+  }
+  let matchedIdx = 0;
+  for (let i = 0; i < valid.length; i++) {
+    const c = valid[i];
+    const opt = document.createElement("option");
+    opt.value = JSON.stringify({ schemeId: c.schemeId, classId: c.classId });
+    opt.textContent = c.courseName + (c.termName ? " · " + c.termName : "");
+    if (savedOpts && savedOpts.schemeId === c.schemeId && savedOpts.classId === c.classId) {
+      matchedIdx = i;
+    }
+    sel.appendChild(opt);
+  }
+  sel.selectedIndex = matchedIdx;
+  $("startBtn").disabled = !sel.value;
+  onCourseChange(savedOpts);
+}
+
+async function onCourseChange(savedOpts) {
+  const selVal = $("course").value;
+  if (!selVal) return;
+  try {
+    const c = JSON.parse(selVal);
+    const data = await api('/api/catalog?schemeId=' + c.schemeId + '&classId=' + c.classId);
+    const total = data.total || 1;
+    sliderLimit.setMax(total);
+    if (savedOpts && savedOpts.schemeId === c.schemeId && savedOpts.classId === c.classId && savedOpts.limit > 0) {
+      const qLo = (savedOpts.offset || 0) + 1;
+      const qHi = Math.min(total, (savedOpts.offset || 0) + savedOpts.limit);
+      sliderLimit.setValues(qLo, qHi);
+    } else {
+      sliderLimit.setValues(1, total);
+    }
+    $("totalQuestionsBadge").textContent = '共 ' + total + ' 题' + (data.unpassed !== undefined ? ' (' + data.unpassed + ' 可刷)' : '');
+    $("scaleMidLimit").textContent = String(Math.round(total / 2));
+    $("scaleMaxLimit").textContent = String(total);
+  } catch (e) {
+    sliderLimit.setMax(30);
+    sliderLimit.setValues(1, 30);
+    $("totalQuestionsBadge").textContent = '共 30 题';
+    $("scaleMidLimit").textContent = "15";
+    $("scaleMaxLimit").textContent = "30";
+  }
+}
+
+$("course").addEventListener("change", () => onCourseChange());
+
+$("refreshBtn").addEventListener("click", async () => {
+  const btn = $("refreshBtn");
+  btn.disabled = true;
+  try {
+    const courses = await api("/api/courses");
+    fillCourses(courses);
+  } catch (err) {
+    setGlobalError(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+/* 启动挂机 */
+$("cfgForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setGlobalError("");
+  const btn = $("startBtn");
+  btn.disabled = true;
+
+  try {
+    const course = JSON.parse($("course").value || "null");
+    if (!course) throw new Error("请选择课程");
+
+    const lo = sliderDuration.getLo();
+    const hi = sliderDuration.getHi();
+    const iLo = sliderInject.getLo();
+    const iHi = sliderInject.getHi();
+    const qLo = sliderLimit.getLo();
+    const qHi = sliderLimit.getHi();
+
+    const maxQ = sliderLimit.getMax();
+    let offset = 0;
+    let limit = 0;
+    if (!(qLo === 1 && qHi === maxQ)) {
+      offset = Math.max(0, qLo - 1);
+      limit = Math.max(1, qHi - qLo + 1);
+    }
+
+    await api("/api/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        schemeId: course.schemeId,
+        classId: course.classId,
+        loMin: lo,
+        hiMin: hi,
+        injectLo: iLo,
+        injectHi: iHi,
+        offset: offset,
+        limit: limit,
+      }),
+    });
+    const st = await api("/api/status");
+    renderStatus(st);
+  } catch (err) {
+    setGlobalError(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$("stopBtn").addEventListener("click", async () => {
+  const btn = $("stopBtn");
+  btn.disabled = true;
+  try {
+    await api("/api/stop", { method: "POST" });
+  } catch (err) {
+    setGlobalError(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$("copyLogBtn").addEventListener("click", () => {
+  const text = $("logContent").textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    $("copyLogBtn").textContent = "已复制";
+    setTimeout(() => { $("copyLogBtn").textContent = "复制"; }, 1500);
+  });
+});
+
+/* 状态更新机 */
+function updateHeaderState(st) {
+  const pill = $("statusPill");
+  const text = $("statusText");
+  pill.className = "status-pill";
+
+  if (st.running) {
+    pill.classList.add("running");
+    text.textContent = "运行中";
+  } else if (st.error) {
+    pill.classList.add("error");
+    text.textContent = "出错";
+  } else if (who) {
+    pill.classList.add("waiting");
+    text.textContent = "就绪";
+  } else {
+    text.textContent = "未登录";
+  }
+
+  const userBadge = $("userBadge");
+  if (who) {
+    $("userName").textContent = who;
+    userBadge.hidden = false;
+  } else {
+    userBadge.hidden = true;
+  }
+}
+
+function updateLogStream(logLines) {
+  if (!logLines || logLines.length === lastLogLen) return;
+  lastLogLen = logLines.length;
+  $("logCountBadge").textContent = String(lastLogLen);
+  const container = $("logContent");
+  const isAtBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 40;
+  const displayLines = logLines.slice(-150);
+  container.textContent = displayLines.join("\n");
+  if (isAtBottom) {
+    container.scrollTop = container.scrollHeight;
+  }
+}
+
+let isAttemptingAutoLogin = false;
+let hasInitialLoadedCourses = false;
+
+function applySavedOptions(opts) {
+  if (!opts) return;
+  if (opts.loMin !== undefined && opts.hiMin !== undefined) {
+    sliderDuration.setValues(opts.loMin, opts.hiMin);
+  }
+  if (opts.injectLo !== undefined && opts.injectHi !== undefined) {
+    sliderInject.setValues(opts.injectLo, opts.injectHi);
+  }
+}
+
+function renderStatus(st) {
+  curPoll = st;
+  updateHeaderState(st);
+
+  if (!st.authenticated && !who) {
+    showStage("login");
+    return;
+  }
+
+  if (st.running) {
+    showStage("run");
+    updateLogStream(st.log || []);
+    const cur = st.current;
+    if (cur) {
+      $("runChapter").textContent = '第' + (cur.chapName || "-") + '章';
+      $("runEid").textContent = 'EID ' + (cur.eid || "-");
+      $("runQName").textContent = cur.pname || "载入中";
+      $("runTargetMin").textContent = min1(cur.targetMin) + 'm';
+    } else {
+      $("runChapter").textContent = "-";
+      $("runEid").textContent = "-";
+      $("runQName").textContent = "换题间隙";
+      $("runTargetMin").textContent = "--";
+    }
+
+    $("mDone").textContent = st.done ?? 0;
+    $("mSkipped").textContent = st.skipped ?? 0;
+    $("mErrors").textContent = st.injectedErrors ?? 0;
+    $("mGained").textContent = '+' + min1((st.gainedSec || 0) / 60) + 'm';
+
+    tickBigNumeral();
+    return;
+  }
+
+  showStage("cfg");
+  if (st.error) {
+    setGlobalError(st.error);
+  }
+}
+
+function tickBigNumeral() {
+  if (!curPoll || !curPoll.running) return;
+  const cur = curPoll.current;
+  if (!cur) {
+    $("runCurMin").textContent = "--";
+    $("dialPct").textContent = "···";
+    $("dialBar").style.strokeDashoffset = "238.76";
+    $("dialBar").style.opacity = "0";
+    $("runTargetMin").textContent = "--";
+    $("runRemaining").textContent = "(换题间隙)";
+    return;
+  }
+
+  const startTime = new Date(cur.startedAt).getTime();
+  const now = Date.now();
+  const elapsedMin = Math.max(0, (now - startTime) / 60000);
+  const initialAccumMin = Math.max(0, (cur.accumSec || 0) / 60);
+  const currentTotalMin = initialAccumMin + elapsedMin;
+  const targetMin = Math.max(0.1, cur.targetMin || 1);
+
+  $("runCurMin").textContent = min1(currentTotalMin);
+  $("runTargetMin").textContent = min1(targetMin) + 'm';
+
+  const ratio = Math.min(1, Math.max(0, currentTotalMin / targetMin));
+  const offset = Math.max(0, Math.min(238.76, 238.76 * (1 - ratio)));
+  $("dialBar").style.strokeDashoffset = offset.toFixed(1);
+  $("dialBar").style.opacity = ratio > 0.005 ? "1" : "0";
+  $("dialPct").textContent = Math.round(ratio * 100) + '%';
+
+  const rem = Math.max(0, targetMin - currentTotalMin);
+  $("runRemaining").textContent = '(余 ' + min1(rem) + 'm)';
+}
+
+setInterval(() => {
+  if (!$("viewRun").hidden) tickBigNumeral();
+}, 1000);
+
+async function pollStatus() {
+  try {
+    const st = await api("/api/status");
+    if (st.authenticated) {
+      who = st.student || "在线学员";
+      if (st.token) {
+        localStorage.setItem("anyview_token", st.token);
+      }
+      if (!hasInitialLoadedCourses) {
+        hasInitialLoadedCourses = true;
+        try {
+          const courses = await api("/api/courses");
+          fillCourses(courses, st.savedOptions);
+          if (st.savedOptions) applySavedOptions(st.savedOptions);
+        } catch {}
+      }
+    } else {
+      const localToken = localStorage.getItem("anyview_token");
+      if (localToken && !isAttemptingAutoLogin && !who) {
+        isAttemptingAutoLogin = true;
+        try {
+          const body = await api("/api/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              token: localToken,
+              xff: localStorage.getItem("anyview_xff") || "",
+            }),
+          });
+          who = (body.student && (body.student.name || body.student.id)) || "在线学员";
+          if (body.token) localStorage.setItem("anyview_token", body.token);
+          hasInitialLoadedCourses = true;
+          fillCourses(body.courses || [], st.savedOptions);
+          if (st.savedOptions) applySavedOptions(st.savedOptions);
+        } catch (e) {
+          localStorage.removeItem("anyview_token");
+        } finally {
+          isAttemptingAutoLogin = false;
+        }
+      }
+    }
+    renderStatus(st);
+  } catch {}
+  setTimeout(pollStatus, 2000);
+}
+
+const savedLocalToken = localStorage.getItem("anyview_token") || "";
+const savedLocalXff = localStorage.getItem("anyview_xff") || "";
+if (savedLocalToken) $("token").value = savedLocalToken;
+if (savedLocalXff) $("xff").value = savedLocalXff;
+
+// 消除首屏闪烁：如已有本地令牌，同步直接展示对应面板（默认 cfg，若上次处于运行态则显示 run），实现 0 闪屏直入
+if (savedLocalToken) {
+  const lastStage = localStorage.getItem("anyview_last_stage");
+  showStage(lastStage === "run" ? "run" : "cfg");
+}
+
+pollStatus();
+</script>
+</body>
+</html>

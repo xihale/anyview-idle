@@ -1,0 +1,8 @@
+anyview-idle
+*.log
+*.tmp
+.anyview-idle-state.json
+.tmp
+tmp/
+.impeccable/
+
