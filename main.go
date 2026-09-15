@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -33,12 +34,17 @@ type AppState struct {
 	Student     *anyview.Student      `json:"student,omitempty"`
 	TaskRunning bool                  `json:"taskRunning"`
 	TaskOptions *anyview.BrushOptions `json:"taskOptions,omitempty"`
+	// ResumeAt 非空 = 有一次"到点重登并续跑"的计划 (token 失效让位期间)
+	ResumeAt *time.Time `json:"resumeAt,omitempty"`
 }
 
 var (
-	stateFile = flag.String("state", ".anyview-idle-state.json", "持久化状态文件路径")
-	stateMu   sync.Mutex
-	appState  AppState
+	stateFile    = flag.String("state", ".anyview-idle-state.json", "持久化状态文件路径")
+	reloginWait  = flag.Duration("relogin-wait", 3*time.Hour, "token 失效后让位多久再自动重登续跑 (用户优先)")
+	reloginRetry = 30 * time.Minute // 重登撞上网络/服务端问题时的重试间隔
+	stateMu      sync.Mutex
+	appState     AppState
+	resumeTimer  *time.Timer
 )
 
 func loadState() {
@@ -71,6 +77,97 @@ func saveState() error {
 	stateMu.Lock()
 	defer stateMu.Unlock()
 	return saveStateLocked()
+}
+
+func stopResumeTimerLocked() {
+	if resumeTimer != nil {
+		resumeTimer.Stop()
+		resumeTimer = nil
+	}
+}
+
+// planResumeLocked 安排一次延迟重登续跑 (不落盘, 由调用方 saveStateLocked); 调用方持有 stateMu。
+func planResumeLocked(d time.Duration) {
+	t := time.Now().Add(d)
+	appState.ResumeAt = &t
+	if resumeTimer != nil {
+		resumeTimer.Stop()
+	}
+	resumeTimer = time.AfterFunc(d, tryResume)
+}
+
+// isLoginRejected 服务端明确拒绝登录 (密码错/锁号等): 不重试, 防连续错锁号。
+func isLoginRejected(err error) bool {
+	return strings.Contains(err.Error(), "登录失败: ")
+}
+
+// tryResume 到点重登并续跑。用户期间已手动登录/开任务则放弃本次安排;
+// 密码被拒则终止计划 (防锁号); 网络/服务端问题 reloginRetry 后再试。
+func tryResume() {
+	stateMu.Lock()
+	if appState.ResumeAt == nil || appState.TaskOptions == nil || appState.TaskRunning {
+		stateMu.Unlock()
+		return
+	}
+	if appState.Username == "" || appState.Password == "" {
+		appState.ResumeAt = nil
+		stopResumeTimerLocked()
+		_ = saveStateLocked()
+		stateMu.Unlock()
+		log.Printf("无保存的账号密码, 无法自动重登, 请手动登录后重新开刷")
+		return
+	}
+	opts := *appState.TaskOptions
+	user, pass, xff := appState.Username, appState.Password, appState.XFF
+	stateMu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	client := anyview.NewClient(xff, "")
+	student, err := client.Login(ctx, user, pass)
+	if err == nil {
+		_, err = client.Courses(ctx)
+	}
+	if err != nil {
+		stateMu.Lock()
+		if isLoginRejected(err) {
+			appState.ResumeAt = nil
+			stopResumeTimerLocked()
+			_ = saveStateLocked()
+			stateMu.Unlock()
+			log.Printf("自动重登被拒 (%v), 已取消续跑计划, 请手动登录核实密码", err)
+			return
+		}
+		planResumeLocked(reloginRetry)
+		_ = saveStateLocked()
+		stateMu.Unlock()
+		log.Printf("自动重登失败 (%v), %v 后再试", err, reloginRetry)
+		return
+	}
+
+	mgr.SetSession(client, student)
+	stateMu.Lock()
+	// 等待期间用户可能已手动登录接管 (ResumeAt 被清)
+	if appState.ResumeAt == nil {
+		stateMu.Unlock()
+		return
+	}
+	appState.ResumeAt = nil
+	appState.Token = client.Token
+	appState.Student = student
+	appState.TaskRunning = true
+	_ = saveStateLocked()
+	stateMu.Unlock()
+	if err := mgr.Start(opts); err != nil {
+		stateMu.Lock()
+		appState.TaskRunning = false
+		_ = saveStateLocked()
+		stateMu.Unlock()
+		log.Printf("续跑启动失败: %v", err)
+		return
+	}
+	log.Printf("已自动重登 (%s) 并续跑: scheme=%d class=%d [%.1f, %.1f]m",
+		student.Name, opts.SchemeID, opts.ClassID, opts.LoMin, opts.HiMin)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -123,6 +220,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	// 后端持久化记录用户名、密码及生成的 Token。
 	// SetSession 会停掉在跑的任务, 必须把 TaskRunning 一并清掉, 否则崩溃后会用旧 options 自动恢复。
+	// 手动登录 = 用户接管, 取消待执行的自动重登续跑。
 	stateMu.Lock()
 	if req.Token != "" {
 		appState.Token = req.Token
@@ -134,6 +232,8 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	appState.XFF = req.XFF
 	appState.Student = student
 	appState.TaskRunning = false
+	appState.ResumeAt = nil
+	stopResumeTimerLocked()
 	_ = saveStateLocked()
 	stateMu.Unlock()
 
@@ -184,6 +284,8 @@ func handleStart(w http.ResponseWriter, r *http.Request) {
 	stateMu.Lock()
 	appState.TaskRunning = true
 	appState.TaskOptions = &opts
+	appState.ResumeAt = nil // 手动开任务 = 用户接管, 取消自动重登计划
+	stopResumeTimerLocked()
 	_ = saveStateLocked()
 	stateMu.Unlock()
 
@@ -237,6 +339,7 @@ func handleStatus(w http.ResponseWriter, _ *http.Request) {
 	stateMu.Lock()
 	savedOpts := appState.TaskOptions
 	savedToken := appState.Token
+	savedResume := appState.ResumeAt
 	stateMu.Unlock()
 
 	token := ""
@@ -267,25 +370,38 @@ func handleStatus(w http.ResponseWriter, _ *http.Request) {
 		"authenticated": client != nil && client.Token != "",
 		"token":         token,
 		"savedOptions":  savedOpts,
+		"resumeAt":      savedResume,
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
 // finishLogout 任务结束后自动下线: 清除会话与持久化 token, 不再占号。
-// 收尾瞬间用户已开出新一轮时跳过, 让新任务继续用当前会话。
-func finishLogout(gainedSec int64) {
+// 任务出错中止 (token 失效/被踢/网络等) 时保留任务并安排延迟重登续跑——
+// 用户优先: 先下线让位, 不立刻抢回会话。收尾瞬间用户已开出新一轮时跳过。
+func finishLogout(gainedSec int64, errMsg string) {
 	if mgr.Status().Running {
 		return
 	}
 	mgr.SetSession(nil, nil)
 	stateMu.Lock()
+	resume := errMsg != "" && appState.TaskOptions != nil
 	appState.TaskRunning = false
 	appState.Token = ""
 	appState.Student = nil
-	appState.TaskOptions = nil
+	if resume {
+		planResumeLocked(*reloginWait)
+	} else {
+		appState.TaskOptions = nil
+		appState.ResumeAt = nil
+		stopResumeTimerLocked()
+	}
 	_ = saveStateLocked()
 	stateMu.Unlock()
-	log.Printf("任务结束, 已自动下线并清除本地会话 (本轮挂机 +%.1f 分钟)", float64(gainedSec)/60)
+	if resume {
+		log.Printf("任务出错中止 (%s), 已下线让位; %v 后自动重登续跑", errMsg, reloginWait)
+	} else {
+		log.Printf("任务结束, 已自动下线并清除本地会话 (本轮挂机 +%.1f 分钟)", float64(gainedSec)/60)
+	}
 }
 
 func initSessionAndTask() {
@@ -297,73 +413,58 @@ func initSessionAndTask() {
 	if st.Token == "" && (st.Username == "" || st.Password == "") {
 		return
 	}
-	// 只为续跑中断的任务才自动上线; 平时重启保持离线, 不占账号
-	if !st.TaskRunning || st.TaskOptions == nil {
+	// 只为未完成的任务自动上线; 平时重启保持离线, 不占账号
+	if st.TaskOptions == nil || (!st.TaskRunning && st.ResumeAt == nil) {
 		log.Printf("无待恢复任务, 保持离线")
 		return
 	}
 
 	client := anyview.NewClient(st.XFF, "")
-	var student *anyview.Student
-	var err error
-
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	// 1. 优先尝试既有 token
+	// 1. 既有 token 还活着就直接续跑 (复用自己的会话不踢人, 无需让位)
 	if st.Token != "" {
 		client.UseToken(st.Token)
-		_, err = client.Courses(ctx)
-		if err == nil {
-			student = st.Student
+		if _, err := client.Courses(ctx); err == nil {
+			student := st.Student
 			if student == nil {
 				student = &anyview.Student{Name: "token 用户"}
 			}
-			log.Printf("已有 Token 验证成功，已自动恢复会话: %s", student.Name)
-		} else {
-			log.Printf("已有 Token 验证失败 (%v)，尝试重新登录", err)
-		}
-	}
-
-	// 2. 如果 token 失效，且保存了用户名和密码，则自动重新登录生成新 token
-	if student == nil && st.Username != "" && st.Password != "" {
-		log.Printf("正在使用持久化凭据自动重新登录: %s", st.Username)
-		student, err = client.Login(ctx, st.Username, st.Password)
-		if err != nil {
-			log.Printf("自动重新登录失败: %v", err)
-			return
-		}
-		_, err = client.Courses(ctx)
-		if err != nil {
-			log.Printf("登录后验证课程失败: %v", err)
-			return
-		}
-		log.Printf("自动重新登录成功: %s, 新 Token 已生成并持久化", student.Name)
-		stateMu.Lock()
-		appState.Token = client.Token
-		appState.Student = student
-		_ = saveStateLocked()
-		stateMu.Unlock()
-	}
-
-	if student != nil {
-		mgr.SetSession(client, student)
-
-		// 3. 重启恢复任务和状态：如果上次退出时任务正在运行，则自动恢复任务
-		if st.TaskRunning && st.TaskOptions != nil {
-			log.Printf("检测到未完成的任务，正在自动恢复运行: 方案=%d 班级=%d [%.1f, %.1f]m",
+			mgr.SetSession(client, student)
+			log.Printf("已有 Token 仍有效, 直接续跑未完成任务: 方案=%d 班级=%d [%.1f, %.1f]m",
 				st.TaskOptions.SchemeID, st.TaskOptions.ClassID, st.TaskOptions.LoMin, st.TaskOptions.HiMin)
+			stateMu.Lock()
+			appState.ResumeAt = nil
+			appState.TaskRunning = true
+			_ = saveStateLocked()
+			stateMu.Unlock()
 			if err := mgr.Start(*st.TaskOptions); err != nil {
-				log.Printf("自动恢复任务失败: %v", err)
 				stateMu.Lock()
 				appState.TaskRunning = false
 				_ = saveStateLocked()
 				stateMu.Unlock()
-			} else {
-				log.Printf("任务已恢复并处于运行态")
+				log.Printf("续跑启动失败: %v", err)
 			}
+			return
+		} else {
+			log.Printf("已有 Token 已失效 (%v)", err)
 		}
 	}
+
+	// 2. token 不可用 → 用户优先: 不立刻重登抢会话, 让位后再自动重登续跑
+	stateMu.Lock()
+	defer stateMu.Unlock()
+	// 旧进程的"在跑"标记已失效, 待办由 ResumeAt 表达; 不清掉会被 tryResume 的守卫拒掉
+	appState.TaskRunning = false
+	if st.ResumeAt != nil && st.ResumeAt.After(time.Now()) {
+		planResumeLocked(time.Until(*st.ResumeAt))
+		log.Printf("维持原有安排: %v 后自动重登续跑", time.Until(*st.ResumeAt).Round(time.Minute))
+	} else {
+		planResumeLocked(*reloginWait)
+		log.Printf("token 失效, 为不抢占你正在用的会话, %v 后自动重登续跑", *reloginWait)
+	}
+	_ = saveStateLocked()
 }
 
 func main() {
@@ -371,7 +472,7 @@ func main() {
 	flag.Parse()
 
 	mgr.SetOnFinish(func(st anyview.RunStatus) {
-		finishLogout(st.GainedSec)
+		finishLogout(st.GainedSec, st.Error)
 	})
 
 	// 启动时初始化恢复会话与任务

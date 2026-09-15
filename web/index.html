@@ -654,6 +654,16 @@ function formatBig(v) {
   return '<span class="int">' + s.slice(0, i) + '</span><span class="dot">.</span><span class="frac">' + s.slice(i + 1) + "</span>";
 }
 
+function fmtDelay(ms) {
+  const m = Math.max(1, Math.round(ms / 60000));
+  if (m >= 60) {
+    const h = Math.floor(m / 60);
+    const r = m % 60;
+    return r ? h + " 小时 " + r + " 分" : h + " 小时";
+  }
+  return m + " 分钟";
+}
+
 function showStage(stage) {
   $("viewLogin").hidden = stage !== "login";
   $("viewCfg").hidden = stage !== "cfg";
@@ -1030,7 +1040,14 @@ function renderStatus(st) {
   if (!st.authenticated && !who) {
     const hadRun = !!(st.finishedAt || (st.log && st.log.length));
     if (autoOff && hadRun) {
-      showDone(st, "本轮已结束，账号已自动下线。再开一轮请重新登录。");
+      let note;
+      if (st.resumeAt) {
+        const wait = new Date(st.resumeAt).getTime() - Date.now();
+        note = "本轮中止，已下线让位；约 " + fmtDelay(wait) + "后自动重登续跑。";
+      } else {
+        note = "本轮已结束，账号已自动下线。再开一轮请重新登录。";
+      }
+      showDone(st, note);
     } else {
       showStage("login");
     }
