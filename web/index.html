@@ -8,11 +8,7 @@
 <title>anyview-idle</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23141310'/%3E%3Ccircle cx='8' cy='8' r='3' fill='%23D2604A'/%3E%3C/svg%3E">
 <script>
-  try {
-    if (localStorage.getItem("anyview_token")) {
-      document.documentElement.dataset.boot = "cfg";
-    }
-  } catch (e) {}
+  try { localStorage.removeItem("anyview_token"); } catch (e) {}
 </script>
 <style>
   @font-face {
@@ -185,9 +181,6 @@
 
   .stage { width: 100%; display: flex; flex-direction: column; gap: 28px; }
   .stage[hidden] { display: none !important; }
-
-  html[data-boot="cfg"] #viewLogin { display: none !important; }
-  html[data-boot="cfg"] #viewCfg { display: flex !important; }
 
   .row {
     display: grid;
@@ -618,8 +611,8 @@ let stopping = false;
 let preferCfg = false;
 let qTotal = 0;
 let catalogSeq = 0;
-let isAttemptingAutoLogin = false;
 let hasInitialLoadedCourses = false;
+let autoOff = false; // 服务端刷完自动下线后置位, 用于在小结页提示而非跳回登录
 
 async function api(path, opts) {
   const res = await fetch(path, opts);
@@ -759,9 +752,7 @@ $("loginForm").addEventListener("submit", async (e) => {
       body: JSON.stringify(payload),
     });
     who = (body.student && (body.student.name || body.student.no)) || "在线";
-    if (body.token) {
-      try { localStorage.setItem("anyview_token", body.token); } catch (err) {}
-    }
+    autoOff = false;
     if (payload.xff) {
       try { localStorage.setItem("anyview_xff", payload.xff); } catch (err) {}
     }
@@ -781,7 +772,7 @@ $("whoBtn").addEventListener("click", async () => {
   who = "";
   preferCfg = false;
   stopping = false;
-  try { localStorage.removeItem("anyview_token"); } catch (e) {}
+  autoOff = false;
   try { await api("/api/logout", { method: "POST" }); } catch (e) {}
   setGlobalError("");
   hasInitialLoadedCourses = false;
@@ -943,6 +934,10 @@ $("stopBtn").addEventListener("click", async () => {
 $("backCfgBtn").addEventListener("click", () => {
   preferCfg = true;
   setGlobalError("");
+  if (curPoll && !curPoll.authenticated) {
+    showStage("login");
+    return;
+  }
   showStage("cfg");
   updateHeaderState(curPoll || { authenticated: true, running: false });
 });
@@ -1028,8 +1023,17 @@ function renderStatus(st) {
   updateHeaderState(st);
   updateLogStream(st.log || [], st.startedAt);
 
+  if (st.error) {
+    setGlobalError(friendlyError(st.error), { reauth: looksLikeAuthError(st.error) });
+  }
+
   if (!st.authenticated && !who) {
-    showStage("login");
+    const hadRun = !!(st.finishedAt || (st.log && st.log.length));
+    if (autoOff && hadRun) {
+      showDone(st, "本轮已结束，账号已自动下线。再开一轮请重新登录。");
+    } else {
+      showStage("login");
+    }
     return;
   }
 
@@ -1054,21 +1058,21 @@ function renderStatus(st) {
     return;
   }
 
-  if (st.error) {
-    setGlobalError(friendlyError(st.error), { reauth: looksLikeAuthError(st.error) });
-  }
-
   const hadRun = !!(st.startedAt || st.finishedAt || (st.log && st.log.length) || st.done || st.gainedSec);
   if (!preferCfg && hadRun) {
-    showStage("done");
-    $("doneLead").innerHTML = "+" + formatBig((st.gainedSec || 0) / 60) + "<small>分</small>";
-    $("doneTally").textContent = tallyText(st);
-    $("doneNote").textContent = st.error ? "这一轮中止。返回配置后可再开。" : "";
-    $("doneNote").hidden = !$("doneNote").textContent;
+    showDone(st, st.error ? "这一轮中止。返回配置后可再开。" : "");
     return;
   }
 
   showStage("cfg");
+}
+
+function showDone(st, note) {
+  showStage("done");
+  $("doneLead").innerHTML = "+" + formatBig((st.gainedSec || 0) / 60) + "<small>分</small>";
+  $("doneTally").textContent = tallyText(st);
+  $("doneNote").textContent = note;
+  $("doneNote").hidden = !note;
 }
 
 function tickBigNumeral() {
@@ -1097,9 +1101,6 @@ async function pollStatus() {
     let st = await api("/api/status");
     if (st.authenticated) {
       who = st.student || who || "在线";
-      if (st.token) {
-        try { localStorage.setItem("anyview_token", st.token); } catch (e) {}
-      }
       if (!hasInitialLoadedCourses) {
         hasInitialLoadedCourses = true;
         try {
@@ -1108,45 +1109,18 @@ async function pollStatus() {
           if (st.savedOptions) applySavedOptions(st.savedOptions);
         } catch (e) {}
       }
-    } else {
-      const localToken = localStorage.getItem("anyview_token");
-      if (localToken && !isAttemptingAutoLogin && !who) {
-        isAttemptingAutoLogin = true;
-        try {
-          const body = await api("/api/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              token: localToken,
-              xff: localStorage.getItem("anyview_xff") || "",
-            }),
-          });
-          who = (body.student && (body.student.name || body.student.no)) || "在线";
-          if (body.token) {
-            try { localStorage.setItem("anyview_token", body.token); } catch (e) {}
-          }
-          hasInitialLoadedCourses = true;
-          fillCourses(body.courses || [], st.savedOptions);
-          if (st.savedOptions) applySavedOptions(st.savedOptions);
-          st = await api("/api/status");
-        } catch (e) {
-          try { localStorage.removeItem("anyview_token"); } catch (err) {}
-        } finally {
-          isAttemptingAutoLogin = false;
-        }
-      }
+    } else if (who) {
+      // 服务端会话已不在: 刷完自动下线或 token 失效, 本地同步下线
+      who = "";
+      autoOff = true;
+      hasInitialLoadedCourses = false;
     }
     renderStatus(st);
   } catch (e) {}
   setTimeout(pollStatus, 2000);
 }
 
-const savedLocalToken = localStorage.getItem("anyview_token") || "";
 const savedLocalXff = localStorage.getItem("anyview_xff") || "";
-if (savedLocalToken) {
-  $("token").value = savedLocalToken;
-  $("advLogin").open = true;
-}
 if (savedLocalXff) $("xff").value = savedLocalXff;
 
 try {
@@ -1154,8 +1128,7 @@ try {
   if (lastStage === "cfg" || lastStage === "login") preferCfg = true;
 } catch (e) {}
 
-if (savedLocalToken) showStage("cfg");
-else showStage("login");
+showStage("login");
 
 if (new URLSearchParams(location.search).get("shot") !== "1") {
   pollStatus();

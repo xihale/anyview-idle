@@ -271,6 +271,23 @@ func handleStatus(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// finishLogout 任务结束后自动下线: 清除会话与持久化 token, 不再占号。
+// 收尾瞬间用户已开出新一轮时跳过, 让新任务继续用当前会话。
+func finishLogout(gainedSec int64) {
+	if mgr.Status().Running {
+		return
+	}
+	mgr.SetSession(nil, nil)
+	stateMu.Lock()
+	appState.TaskRunning = false
+	appState.Token = ""
+	appState.Student = nil
+	appState.TaskOptions = nil
+	_ = saveStateLocked()
+	stateMu.Unlock()
+	log.Printf("任务结束, 已自动下线并清除本地会话 (本轮挂机 +%.1f 分钟)", float64(gainedSec)/60)
+}
+
 func initSessionAndTask() {
 	loadState()
 	stateMu.Lock()
@@ -278,6 +295,11 @@ func initSessionAndTask() {
 	stateMu.Unlock()
 
 	if st.Token == "" && (st.Username == "" || st.Password == "") {
+		return
+	}
+	// 只为续跑中断的任务才自动上线; 平时重启保持离线, 不占账号
+	if !st.TaskRunning || st.TaskOptions == nil {
+		log.Printf("无待恢复任务, 保持离线")
 		return
 	}
 
@@ -349,10 +371,7 @@ func main() {
 	flag.Parse()
 
 	mgr.SetOnFinish(func(st anyview.RunStatus) {
-		stateMu.Lock()
-		appState.TaskRunning = false
-		_ = saveStateLocked()
-		stateMu.Unlock()
+		finishLogout(st.GainedSec)
 	})
 
 	// 启动时初始化恢复会话与任务
