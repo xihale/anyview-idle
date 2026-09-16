@@ -1,6 +1,8 @@
 # anyview-idle
 
-AnyView 自动待机刷时长（accumTime）的本地小工具：Go 后端 + 纯 HTML 前端（单文件内嵌）。
+AnyView 自动待机刷时长（accumTime）的小服务：Go 后端 + 纯 HTML 前端（单文件内嵌）。
+多账号：每个浏览器一条 cookie 对应一个独立会话，各自登录、各自刷课、状态互不可见；
+所有账号的上游请求共享 `-rpm` 全局限速（同一出口 IP 防 WAF 拉黑）。
 
 从 fuckView 的 `idle` 命令拆出，协议细节见 fuckView 仓库 `analysis/02`（登录）、`09`（WAF/XFF）、`10`（计时机制）。
 
@@ -10,6 +12,7 @@ AnyView 自动待机刷时长（accumTime）的本地小工具：Go 后端 + 纯
 go build -o anyview-idle .
 ./anyview-idle                # 默认 http://127.0.0.1:8765
 ./anyview-idle -addr :9000    # 自定义监听
+./anyview-idle -rpm 20        # 全局上游限速 (每分钟请求数, 所有账号共享, 默认 20)
 ```
 
 浏览器打开后：
@@ -80,15 +83,23 @@ statusType:403             停留过长 → 断开重连后重发 401 续计时
   **X-Forwarded-For**（你的公网出口 IP，登录后不可变），否则网关一律 405/403
   （会话绑定 XFF，见 analysis/09）。
 - 密码连续输错有锁号风险（约 3 次），后端不做重试。
-- 监听默认 `127.0.0.1`，API 无鉴权，不要暴露公网。
+- 服务仍只绑本机 `127.0.0.1`，API 本身无鉴权，公开访问须经反代（如 Caddy）暴露。
+  会话按 cookie 隔离（sid 为 128bit 随机值，HttpOnly），别人看不到你的账号与进度，
+  但**任何能访问到服务的人都能注册自己的会话登录刷课**——不想开放就在反代层加
+  `basic_auth` 或访问控制。
+- 所有账号共享 `-rpm` 上游限速（默认 20 次/分钟，语义同 anyview-next relay：
+  60s 滑动窗口、相邻放行均匀铺开、排队超 20s 放弃报错），账号越多并行开刷
+  越容易触顶排队。
 
 ## 结构
 
 ```
 main.go                  HTTP 路由 + 内嵌前端
+session.go               多账号会话: cookie 隔离/按会话持久化/让位重登计时
 internal/anyview/
   client.go              登录(RSA "密码,时间戳" + multipart)/课程列表(多版本归一化)/catalog
                          /compile/runGroup/代码存档快照与回写
+  limiter.go             全局上游限速 (60s 滑动窗口, 所有账号共享)
   timer.go               exam WS 计时器 (401/117/206/119/403, 20s 分片, 断线重连续挂)
   brusher.go             刷机编排: 区间随机目标点/跳过达标/错误注入/复核到账/日志环
 web/index.html           纯 HTML 前端, 2s 轮询 /api/status

@@ -12,7 +12,7 @@ Existing codebase: Go backend (HTTP + WebSocket client, `go:embed`), frontend is
 
 ## Users
 
-One person: the operator themself — a technical university student running the console on `127.0.0.1` in a browser window parked next to a terminal. Sessions run minutes to hours, mostly unattended; the operator glances at it from across the desk and interacts only to configure, start, and stop.
+A small circle of classmates sharing one deployment, each with their own AnyView account. Each browser holds an independent cookie session: its own login, its own run, its own status — nobody sees anybody else's account or progress. The operator deploys it on their router behind a reverse proxy; sessions run minutes to hours, mostly unattended; users glance at it and interact only to configure, start, and stop.
 
 ## Product Purpose
 
@@ -24,7 +24,8 @@ A machine whose whole job is to sit perfectly still: it measures patience, not s
 
 ## Operating Context
 
-- Localhost only (`127.0.0.1` bind; the API has no auth — must never be exposed).
+- Binds `127.0.0.1` and is exposed through a reverse proxy (Caddy). The API has no user-facing auth: sessions are cookie-isolated (128-bit random sid), so anyone reachable can create their own session and brush — gate at the proxy if that is not wanted.
+- All accounts share one egress IP and one upstream rate limit (`-rpm`, default 20/min, sliding 60s window): parallel brushing queues politely instead of tripping the WAF.
 - Used next to a terminal, often at night, often for long stretches; glanceability matters more than density.
 - Ritual: login (or paste a token) → pick course → set time range + error range → start → walk away → come back to a summary.
 - Platform realities: WAF pacing (tens of requests/minute), token ~12h lifetime, server times only one question at a time (serial holds).

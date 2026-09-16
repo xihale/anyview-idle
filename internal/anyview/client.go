@@ -75,6 +75,11 @@ type envelope struct {
 }
 
 func (c *Client) do(ctx context.Context, method, path string, contentType string, body io.Reader) (*envelope, error) {
+	if sharedLimiter != nil {
+		if err := sharedLimiter.wait(ctx); err != nil {
+			return nil, err
+		}
+	}
 	req, err := http.NewRequestWithContext(ctx, method, BaseURL+path, body)
 	if err != nil {
 		return nil, err
