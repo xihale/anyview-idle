@@ -1,0 +1,235 @@
+/* status-lite 设计语言: MD3 teal 种子配色 + Element Plus 变量映射。
+   Element 的组件观感全部走 --el-* 变量, 这里把 teal MD3 色板灌进去,
+   浅/深两套与 html.dark (Element 约定) 同步切换。 */
+:root {
+  /* ---- MD3 tokens (light) ---- */
+  --md-primary: #00696b;
+  --md-on-primary: #ffffff;
+  --md-primary-container: #9cf1f0;
+  --md-on-primary-container: #002021;
+  --md-secondary-container: #cce8e8;
+  --md-on-secondary-container: #051f20;
+  --md-error: #ba1a1a;
+  --md-error-container: #ffdad6;
+  --md-on-error-container: #410002;
+  --md-warn: #7c5800;
+  --md-warn-container: #ffdfaa;
+  --md-on-warn-container: #261a00;
+  --md-surface: #f4faf9;
+  --md-on-surface: #161d1d;
+  --md-on-surface-variant: #3f4949;
+  --md-surface-low: #eef4f4;
+  --md-surface-container: #e9efee;
+  --md-surface-high: #e3e9e8;
+  --md-surface-highest: #dde3e3;
+  --md-outline: #6f7979;
+  --md-outline-variant: #bec8c7;
+  --md-radius: 12px;
+  --md-motion: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ---- Element ← MD3 ---- */
+  --el-color-primary: var(--md-primary);
+  --el-color-primary-light-3: #4d9697;
+  --el-color-primary-light-5: #80b4b5;
+  --el-color-primary-light-7: #b3d2d2;
+  --el-color-primary-light-8: #ccdede;
+  --el-color-primary-light-9: #e5efef;
+  --el-color-primary-dark-2: #005456;
+  --el-color-success: var(--md-primary);
+  --el-color-success-light-3: #4d9697;
+  --el-color-success-light-5: #80b4b5;
+  --el-color-success-light-7: #b3d2d2;
+  --el-color-success-light-8: #ccdede;
+  --el-color-success-light-9: #e5efef;
+  --el-color-success-dark-2: #005456;
+  --el-color-warning: var(--md-warn);
+  --el-color-warning-light-3: #93804d;
+  --el-color-warning-light-5: #b3a686;
+  --el-color-warning-light-7: #d4cbbf;
+  --el-color-warning-light-8: #e4ddd3;
+  --el-color-warning-light-9: #f4eee9;
+  --el-color-warning-dark-2: #634600;
+  --el-color-danger: var(--md-error);
+  --el-color-danger-light-3: #c95757;
+  --el-color-danger-light-5: #dc8d8d;
+  --el-color-danger-light-7: #ecc3c3;
+  --el-color-danger-light-8: #f3d8d8;
+  --el-color-danger-light-9: #f9ecec;
+  --el-color-danger-dark-2: #951515;
+  --el-color-error: var(--md-error);
+  --el-bg-color: var(--md-surface);
+  --el-bg-color-page: var(--md-surface);
+  --el-bg-color-overlay: #ffffff;
+  --el-fill-color-blank: var(--md-surface);
+  --el-fill-color: var(--md-surface-low);
+  --el-fill-color-light: var(--md-surface-container);
+  --el-fill-color-lighter: var(--md-surface-container);
+  --el-text-color-primary: var(--md-on-surface);
+  --el-text-color-regular: var(--md-on-surface);
+  --el-text-color-secondary: var(--md-on-surface-variant);
+  --el-text-color-placeholder: var(--md-outline);
+  --el-border-color: var(--md-outline-variant);
+  --el-border-color-light: var(--md-outline-variant);
+  --el-border-color-lighter: var(--md-outline-variant);
+  --el-border-color-extra-light: var(--md-surface-highest);
+  --el-font-family: system-ui, Roboto, "Noto Sans SC", "PingFang SC", sans-serif;
+  --el-border-radius-base: 10px;
+  --el-border-radius-round: 9999px;
+}
+html.dark {
+  /* ---- MD3 tokens (dark) ---- */
+  --md-primary: #4ddadb;
+  --md-on-primary: #003f40;
+  --md-primary-container: #005f61;
+  --md-on-primary-container: #9cf1f0;
+  --md-secondary-container: #324b4d;
+  --md-on-secondary-container: #cce8e8;
+  --md-error: #ffb4ab;
+  --md-error-container: #93000a;
+  --md-on-error-container: #ffdad6;
+  --md-warn: #ffb951;
+  --md-warn-container: #573f00;
+  --md-on-warn-container: #ffdfaa;
+  --md-surface: #0e1415;
+  --md-on-surface: #dde4e3;
+  --md-on-surface-variant: #bec8c7;
+  --md-surface-low: #161d1d;
+  --md-surface-container: #1a2121;
+  --md-surface-high: #242b2b;
+  --md-surface-highest: #2f3636;
+  --md-outline: #889292;
+  --md-outline-variant: #3f4949;
+
+  --el-color-primary: var(--md-primary);
+  --el-color-primary-light-3: #82e5e6;
+  --el-color-primary-light-5: #a6eded;
+  --el-color-primary-light-7: #c9f3f4;
+  --el-color-primary-light-8: #dcf8f8;
+  --el-color-primary-light-9: #eefbfb;
+  --el-color-primary-dark-2: #3daeb0;
+  --el-color-success-light-3: #82e5e6;
+  --el-color-success-light-5: #a6eded;
+  --el-color-success-light-7: #c9f3f4;
+  --el-color-success-light-8: #dcf8f8;
+  --el-color-success-light-9: #eefbfb;
+  --el-color-success-dark-2: #3daeb0;
+  --el-color-warning-light-3: #fcc98a;
+  --el-color-warning-light-5: #fdd8ab;
+  --el-color-warning-light-7: #fee8cb;
+  --el-color-warning-light-8: #fef0dd;
+  --el-color-warning-light-9: #fef7ee;
+  --el-color-warning-dark-2: #e0a544;
+  --el-color-danger-light-3: #fcc4bf;
+  --el-color-danger-light-5: #fed4d0;
+  --el-color-danger-light-7: #fee5e2;
+  --el-color-danger-light-8: #ffedeb;
+  --el-color-danger-light-9: #fff6f5;
+  --el-color-danger-dark-2: #e0a09a;
+  --el-bg-color: var(--md-surface);
+  --el-bg-color-overlay: var(--md-surface-low);
+  --el-fill-color-blank: var(--md-surface);
+  --el-fill-color: var(--md-surface-low);
+  --el-fill-color-light: var(--md-surface-container);
+  --el-fill-color-lighter: var(--md-surface-container);
+  --el-text-color-primary: var(--md-on-surface);
+  --el-text-color-regular: var(--md-on-surface);
+  --el-text-color-secondary: var(--md-on-surface-variant);
+  --el-border-color: var(--md-outline-variant);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+  font-family: system-ui, Roboto, "Noto Sans SC", "PingFang SC", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ---- 卡片 = status-lite 的 surface-container-low 圆角卡, 无阴影无描边 ---- */
+.el-card {
+  --el-card-border-color: transparent;
+  --el-card-border-radius: var(--md-radius);
+  --el-card-bg-color: var(--md-surface-low);
+  --el-card-padding: 18px 20px;
+  box-shadow: none !important;
+  animation: card-in 0.4s var(--md-motion) backwards;
+}
+@keyframes card-in { from { opacity: 0; transform: translateY(8px); } }
+.card-head {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+}
+.card-head h2 {
+  margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.4px; flex: 1;
+}
+.card-icon { color: var(--md-primary); display: grid; place-items: center; }
+.card-icon .el-icon { width: 20px; height: 20px; font-size: 20px; }
+.card-sub { margin: -6px 0 14px; font-size: 13px; color: var(--md-on-surface-variant); }
+
+/* ---- 大号指标 (tabular-nums) ---- */
+.metric-big { display: flex; align-items: baseline; gap: 6px; margin: 2px 0 10px; }
+.metric-big .num {
+  font-size: 44px; font-weight: 400; line-height: 1.1; font-variant-numeric: tabular-nums;
+}
+.metric-big .unit { font-size: 18px; color: var(--md-on-surface-variant); }
+.substats { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 12px; }
+.substats .stat .lbl { font-size: 12px; color: var(--md-on-surface-variant); }
+.substats .stat .val { font-weight: 500; font-variant-numeric: tabular-nums; }
+
+/* ---- MD3 进度条 (分段栈) ---- */
+.bar-track {
+  height: 8px; border-radius: 9999px;
+  background: var(--md-surface-highest);
+  overflow: hidden; margin: 6px 0; display: flex;
+}
+.bar-fill {
+  height: 100%; width: 0;
+  background: var(--md-primary);
+  transition: width 0.5s var(--md-motion), background 0.3s;
+}
+.bar-fill.muted { background: var(--md-outline); }
+.bar-fill.err { background: var(--md-error); }
+.bar-caption {
+  display: flex; justify-content: space-between;
+  font-size: 12px; color: var(--md-on-surface-variant); font-variant-numeric: tabular-nums;
+}
+
+/* ---- 顶栏: 毛玻璃 + 发丝线 ---- */
+.appbar {
+  position: sticky; top: 0; z-index: 10;
+  background: color-mix(in srgb, var(--md-surface) 85%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+.appbar-inner {
+  max-width: 860px; margin: 0 auto; padding: 10px 20px;
+  display: flex; align-items: center; gap: 12px;
+}
+.brand { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+.brand h1 { margin: 0; font-size: 20px; font-weight: 500; letter-spacing: 0.2px; white-space: nowrap; }
+.brand .logo { color: var(--md-primary); }
+
+main.container { max-width: 860px; margin: 0 auto; padding: 20px; display: grid; gap: 16px; }
+
+footer.page {
+  max-width: 860px; margin: 0 auto; padding: 8px 20px 28px;
+  color: var(--md-outline); font-size: 12px; text-align: center;
+}
+
+/* ---- 日志终端块 ---- */
+.log-body {
+  padding: 12px; border-radius: 10px;
+  background: var(--md-surface);
+  border: 1px solid var(--md-outline-variant);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12px; line-height: 1.6;
+  max-height: 260px; overflow: auto;
+  white-space: pre-wrap; word-break: break-all;
+  margin: 0;
+}
+
+/* Element 细节校准 */
+.el-button { --el-button-font-weight: 500; }
+.el-descriptions__body { background: transparent !important; }
+.el-check-tag { font-weight: 500; }

@@ -20,7 +20,7 @@ import (
 	"anyview-idle/internal/anyview"
 )
 
-//go:embed web
+//go:embed all:web/dist
 var webFS embed.FS
 
 type AppState struct {
@@ -260,6 +260,7 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 	resp := map[string]any{
 		"running":        st.Running,
 		"error":          st.Error,
+		"mode":           st.Mode,
 		"student":        st.Student,
 		"course":         st.Course,
 		"loMin":          st.LoMin,
@@ -268,6 +269,7 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 		"done":           st.Done,
 		"skipped":        st.Skipped,
 		"failed":         st.Failed,
+		"solved":         st.Solved,
 		"injectedErrors": st.InjectedErrors,
 		"gainedSec":      st.GainedSec,
 		"startedAt":      st.StartedAt,
@@ -294,13 +296,24 @@ func main() {
 		s.restore()
 	}
 
-	static, err := fs.Sub(webFS, "web")
+	static, err := fs.Sub(webFS, "web/dist")
 	if err != nil {
 		log.Fatal(err)
 	}
+	fileServer := http.FileServer(http.FS(static))
 
 	mux := http.NewServeMux()
-	mux.Handle("GET /", http.FileServer(http.FS(static)))
+	// SPA: 静态文件存在则直出, 否则回 index.html
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/")
+		if path == "" {
+			path = "index.html"
+		}
+		if _, err := fs.Stat(static, path); err != nil {
+			r.URL.Path = "/"
+		}
+		fileServer.ServeHTTP(w, r)
+	})
 	mux.HandleFunc("POST /api/login", handleLogin)
 	mux.HandleFunc("POST /api/logout", handleLogout)
 	mux.HandleFunc("GET /api/courses", handleCourses)

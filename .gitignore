@@ -6,3 +6,5 @@ anyview-idle
 tmp/
 .impeccable/
 
+web-src/node_modules/
+.mimosa/

@@ -27,6 +27,11 @@ const (
 )
 
 type BrushOptions struct {
+	// Mode 任务类型: "idle" 挂机计时 (默认, 空串兼容旧持久化) / "solve" 自动刷题
+	Mode string `json:"mode,omitempty"`
+	// ProbeOnly 仅 solve 模式: 只跑空桩探测答案表, 不交 round-2, 不改 pass
+	ProbeOnly bool `json:"probeOnly,omitempty"`
+	// ---- idle 模式字段 ----
 	SchemeID int64   `json:"schemeId"`
 	ClassID  int64   `json:"classId"`
 	LoMin    float64 `json:"loMin"` // 区间下限, 分钟
@@ -35,10 +40,24 @@ type BrushOptions struct {
 	// 每次尝试随机为「编译错误」或「编译过但运行错」; 运行正确绝不注入(会判过改 pass)。
 	InjectLo int `json:"injectLo"`
 	InjectHi int `json:"injectHi"`
-	// 本次最多处理几题, 0 = 全部
+	// 本次最多处理几题, 0 = 全部 (两模式共用)
 	Limit int `json:"limit,omitempty"`
 	// 题目起始偏移 (0-indexed)
 	Offset int `json:"offset,omitempty"`
+}
+
+// ModeIdle / ModeSolve 任务类型常量。
+const (
+	ModeIdle  = "idle"
+	ModeSolve = "solve"
+)
+
+// EffectiveMode 空串兼容旧持久化数据。
+func (o BrushOptions) EffectiveMode() string {
+	if o.Mode == ModeSolve {
+		return ModeSolve
+	}
+	return ModeIdle
 }
 
 type CurrentInfo struct {
@@ -53,15 +72,18 @@ type CurrentInfo struct {
 type RunStatus struct {
 	Running   bool    `json:"running"`
 	Error     string  `json:"error,omitempty"`
+	Mode      string  `json:"mode,omitempty"` // idle / solve
 	Student   string  `json:"student,omitempty"`
 	Course    string  `json:"course,omitempty"`
 	LoMin     float64 `json:"loMin,omitempty"`
 	HiMin     float64 `json:"hiMin,omitempty"`
 	Total     int     `json:"total"`
-	Done      int     `json:"done"` // 本轮实际挂了且复核到账
+	Done      int     `json:"done"` // idle: 本轮实际挂了且复核到账; solve 探测模式: 已探测题数
 	Skipped   int     `json:"skipped"`
 	Failed    int     `json:"failed"`
 	GainedSec int64   `json:"gainedSec"`
+	// solve 模式: round-2 判题通过、pass 已落账的题数
+	Solved int `json:"solved"`
 	// 注入阶段实际产生的错误次数 (编译错误 + 运行错误)
 	InjectedErrors int          `json:"injectedErrors"`
 	Current        *CurrentInfo `json:"current,omitempty"`
@@ -175,6 +197,7 @@ func (m *Manager) Start(opts BrushOptions) error {
 	now := time.Now()
 	r.status = RunStatus{
 		Running:   true,
+		Mode:      opts.EffectiveMode(),
 		Student:   m.studentNameLocked(),
 		LoMin:     opts.LoMin,
 		HiMin:     opts.HiMin,
@@ -248,6 +271,14 @@ func (r *run) finish(err error) {
 }
 
 func (r *run) exec() {
+	if r.opts.EffectiveMode() == ModeSolve {
+		r.execSolve()
+		return
+	}
+	r.execIdle()
+}
+
+func (r *run) execIdle() {
 	r.logf("▶ 开始: 区间 [%.1f, %.1f] 分钟, scheme=%d class=%d",
 		r.opts.LoMin, r.opts.HiMin, r.opts.SchemeID, r.opts.ClassID)
 	if r.opts.InjectHi > 0 {
@@ -641,14 +672,17 @@ func (o BrushOptions) validate() error {
 	if o.SchemeID <= 0 || o.ClassID <= 0 {
 		return errors.New("缺少 schemeId 或 classId")
 	}
+	if o.Offset < 0 || o.Limit < 0 {
+		return errors.New("offset/limit 不能为负")
+	}
+	if o.EffectiveMode() == ModeSolve {
+		return nil // solve 模式不用时长/注入区间
+	}
 	if o.LoMin <= 0 || o.HiMin < o.LoMin || o.HiMin > maxHoldMin {
 		return errors.New("时长区间不合法 (需 0 < 下限 ≤ 上限 ≤ 180)")
 	}
 	if o.InjectLo < 0 || o.InjectHi < o.InjectLo || o.InjectHi > maxInjectHi {
 		return errors.New("错误次数区间不合法 (需 0 ≤ 下限 ≤ 上限 ≤ 50)")
-	}
-	if o.Offset < 0 || o.Limit < 0 {
-		return errors.New("offset/limit 不能为负")
 	}
 	return nil
 }

@@ -482,15 +482,19 @@ func CompileOK(d *CompileData) bool { return strings.Contains(d.Result, "编译�
 
 // RunGroup kind/language 是判题组解析的关键: 用错会"判题空转"(right=0 err=0 end=true,
 // analysis/09 借题实验同款症状), 必须用 scheme/list/student/{eid} 回的题目真实值。
+// codeB64 为空时不下发 stuCode 字段 (前端 run-button 对 C/C++ 同款省略, solutions/465/run.ts)。
 func (c *Client) RunGroup(ctx context.Context, eID int64, codeB64, qfn string, kind, language int64) (*RunData, error) {
-	env, err := c.postForm(ctx, "/api/gdb-service/code/runGroup", [][2]string{
+	fields := [][2]string{
 		{"questionFullName", qfn},
 		{"eID", fmt.Sprintf("%d", eID)},
 		{"isTeacher", "false"},
 		{"kind", fmt.Sprintf("%d", kind)},
 		{"language", fmt.Sprintf("%d", language)},
-		{"stuCode", codeB64},
-	})
+	}
+	if codeB64 != "" {
+		fields = append(fields, [2]string{"stuCode", codeB64})
+	}
+	env, err := c.postForm(ctx, "/api/gdb-service/code/runGroup", fields)
 	if err != nil {
 		return nil, fmt.Errorf("判题请求失败: %w", err)
 	}
@@ -547,6 +551,45 @@ func (c *Client) SaveStuCode(ctx context.Context, eID int64, codeB64 string) err
 		return fmt.Errorf("code=%v %s", env.Code, env.Message)
 	}
 	return nil
+}
+
+// Release 清掉 gdb-service 会话粘滞的编译工作目录 (analysis/08: 换题前必须 release,
+// 否则撞上旧题模板 multiple definition of main)。返回值忽略内容, 只看是否 200。
+func (c *Client) Release(ctx context.Context) error {
+	env, err := c.do(ctx, http.MethodPost, "/api/gdb-service/code/release", "", nil)
+	if err != nil {
+		return fmt.Errorf("release 失败: %w", err)
+	}
+	if !codeOK(env.Code) {
+		return fmt.Errorf("release 失败: code=%v %s", env.Code, env.Message)
+	}
+	return nil
+}
+
+// GetTemplate 取题目默认代码模板 (analysis/04: GET
+// scheme/getQuestionTemplate/student/{eID}, data 为 Base64)。函数补全题的
+// Dx.cpp 自带 main, 学生代码只能写函数。
+func (c *Client) GetTemplate(ctx context.Context, eID int64) (string, error) {
+	env, err := c.get(ctx, fmt.Sprintf("/api/scheme-service/scheme/getQuestionTemplate/student/%d", eID))
+	if err != nil {
+		return "", fmt.Errorf("取模板失败: %w", err)
+	}
+	if !codeOK(env.Code) {
+		return "", fmt.Errorf("取模板失败: code=%v %s", env.Code, env.Message)
+	}
+	var tplB64 string
+	if err := json.Unmarshal(env.Data, &tplB64); err != nil {
+		return "", fmt.Errorf("模板响应格式异常: %w", err)
+	}
+	raw, err := base64.StdEncoding.DecodeString(tplB64)
+	if err != nil {
+		// 有的版本直接回明文, 不是 base64: 原样当源码用
+		return tplB64, nil
+	}
+	if !utf8.Valid(raw) {
+		return "", errors.New("模板解码后不是合法 UTF-8")
+	}
+	return string(raw), nil
 }
 
 // ExerciseRecord 记录单道题目的服务端历史统计 (编译/运行错误计数, accumTime 等)
