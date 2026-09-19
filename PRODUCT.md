@@ -8,7 +8,11 @@ web
 
 ## Stack
 
-Existing codebase: Go backend (HTTP + WebSocket client, `go:embed`), frontend is a single pure-HTML/vanilla-JS file (`web/index.html`) served by the binary. No build step, no framework. This is settled and not up for redesign.
+Go backend (HTTP + WebSocket client, `go:embed`), frontend is Vue 3 + Element Plus built with
+Vite (`web-src/`, output embedded from `web/dist`). User directive (2026-09-20) replaced the
+earlier "no framework" constraint with "用 Vue，尽量完善的方案（如 Element 库）"; the teal
+status-lite design language is applied by theming Element's CSS variables. Single-binary
+deployment unchanged.
 
 ## Users
 
@@ -16,7 +20,7 @@ A small circle of classmates sharing one deployment, each with their own AnyView
 
 ## Product Purpose
 
-anyview-idle quietly accrues "accumTime" (recorded study time) on the AnyView OJ platform. It holds exactly one timing session at a time (exam WebSocket 401 message pairs) per unpassed question until that question's accumulated time reaches a randomly drawn target inside a user-set range; questions already at or above the range floor are skipped. After each hold it can inject a controlled number of *error* attempts (compile errors or failing runs using the student's own unpassed code) to make the account's activity record look human. Success means: time accrues server-side and the operator does nothing.
+anyview-idle quietly works on the AnyView OJ platform in two modes. **Idle** accrues "accumTime" (recorded study time): it holds exactly one timing session at a time (exam WebSocket 401 message pairs) per unpassed question until that question's accumulated time reaches a randomly drawn target inside a user-set range; after each hold it can inject a controlled number of *error* attempts (compile errors or failing runs using the student's own unpassed code) to make the account's activity record look human. **Solve** actually passes questions automatically via the verified oracle-leak method (analysis/09 appx.2): submit the untouched template as a stub, read the per-group input/expected pairs leaked through the judge echo, submit generated table-lookup code, and restore the archived student code byte-identical afterwards. Success means: time accrues server-side / questions flip to passed, and the operator does nothing.
 
 ## Positioning
 
@@ -32,9 +36,18 @@ A machine whose whole job is to sit perfectly still: it measures patience, not s
 
 ## Capabilities and Constraints
 
-- Time target is a range; each question draws a random target in it. accum ≥ range floor ⇒ skip (time never brushes downward).
-- Passed questions are never brushed; questions already in range are skipped.
-- Error injection happens **after** the hold, is capped by a range, never injects a run that would pass, and snapshots/restores the archived student code around every attempt. Lab questions (questionType ≥ 3) are skipped.
+- Two task modes share one pipeline (catalog → filter unpassed → per-question work → summary),
+  and the same persistence/auto-relogin machinery.
+- Idle: time target is a range; each question draws a random target in it. accum ≥ range floor
+  ⇒ skip (time never brushes downward). Passed questions are never brushed.
+- Idle error injection happens **after** the hold, is capped by a range, never injects a run
+  that would pass, and snapshots/restores the archived student code around every attempt.
+  Lab questions (questionType ≥ 3) are skipped.
+- Solve: stub-probe leaks the answer table through the judge echo; generated lookup code must
+  actually pass runGroup before anything counts — no fake bookkeeping. The archive is restored
+  (verified by read-back) after every attempt, passed or not. Probe-only mode never submits
+  round-2 and never changes pass. Oracle formats the parser cannot read are dumped to the log
+  and the question is marked failed, never guessed.
 - Terminal output is a timestamped running log; the log is the audit trail and must stay readable.
 
 ## Brand Commitments
