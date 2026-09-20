@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html"
 	"math/rand/v2"
 	"regexp"
 	"strings"
@@ -37,30 +38,38 @@ type OraclePair struct {
 }
 
 var (
-	// 组结束标记: ===RIGHT=== / ===ERROR=== (逐组), ========RIGHT======== (汇总行)
-	reGroupMarker = regexp.MustCompile(`(?m)^[=\-]*\s*=+[A-Z]+=+\s*[=\-]*$`)
-	// 组头: 「第N组」任意装饰
+	// 组结束标记: ===RIGHT=== / ========RIGHT======== / --------ERROR-------- (现网实测为纯短横线)
+	reGroupMarker = regexp.MustCompile(`(?m)^[=\-]+\s*(?:=+(?:RIGHT|ERROR)=+|(?:RIGHT|ERROR))\s*[=\-]+$`)
+	// 组头: 「第N组」任意装饰 (旧格式兜底)
 	reGroupHead = regexp.MustCompile(`(?m)^.*第\s*\d+\s*组.*$`)
-	// 段标签行: 输入/你的结果/系统结果 (含常见变体)
-	reInputLabel = regexp.MustCompile(`(?m)^[^\S\n]*(输入|输入数据|测试输入|Input)[::]?.*$`)
-	reYourLabel  = regexp.MustCompile(`(?m)^[^\S\n]*(你的结果|你的输出|运行结果|Your (?:output|result))[::]?.*$`)
-	reSysLabel   = regexp.MustCompile(`(?m)^[^\S\n]*(系统结果|正确结果|标准结果|期望输出|正确输出|System result|Expected)[::]?.*$`)
+	// 段标签行 (现网实测: 函数输入：/你的结果：/系统结果：, 解码后各占一行)
+	reInputLabel = regexp.MustCompile(`(?m)^[^\S\n]*(?:函数输入|输入数据|测试输入|输入|Input)[::]?.*$`)
+	reYourLabel  = regexp.MustCompile(`(?m)^[^\S\n]*(?:你的结果|你的输出|运行结果|Your (?:output|result))[::]?.*$`)
+	reSysLabel   = regexp.MustCompile(`(?m)^[^\S\n]*(?:系统结果|正确结果|标准结果|期望输出|正确输出|System result|Expected)[::]?.*$`)
+	// 判题回显是 HTML: <br> 换行, &nbsp; 等实体转义
+	reBrTag = regexp.MustCompile(`(?i)<br\s*/?>`)
 )
+
+// decodeOracleHTML 把判题回显的 HTML 转成纯文本。
+// &nbsp; 经 html.UnescapeString 变成 U+00A0, 而查表归一化只剥 ASCII 空白,
+// 必须在这里折算成普通空格, 否则运行时 stdin (普通空格) 与表键对不上。
+func decodeOracleHTML(s string) string {
+	s = html.UnescapeString(s)
+	s = reBrTag.ReplaceAllString(s, "\n")
+	return strings.ReplaceAll(s, "\u00a0", " ")
+}
 
 // markerLine 判题标记行 (渲染层消费, 提取答案时要剥掉)。
 func markerLine(s string) bool {
-	t := strings.TrimSpace(s)
-	if t == "" {
-		return false
-	}
-	u := strings.ToUpper(t)
-	return strings.Contains(u, "=RIGHT=") || strings.Contains(u, "=ERROR=")
+	return reGroupMarker.MatchString(strings.TrimSpace(s))
 }
 
 // ParseOracle 从 runGroup 拼接输出里提取每组 (输入, 正确输出)。
-// 格式按标签行切; 标签缺失的组块整块丢弃。任何一组解析不出来都宁可少不宁可错:
-// 返回的 pairs 只含三段齐全的组, 全不齐全时返回错误。
-func ParseOracle(output string) ([]OraclePair, error) {
+// 回显为 HTML (标签+实体), 先解码; 每组以判题标记行收尾, 按标记切块。
+// 任何一组解析不出来都宁可少不宁可错: 返回的 pairs 只含三段齐全的组,
+// 全不齐全时返回错误。
+func ParseOracle(raw string) ([]OraclePair, error) {
+	output := decodeOracleHTML(raw)
 	blocks := splitOracleBlocks(output)
 	var pairs []OraclePair
 	for _, b := range blocks {
@@ -69,6 +78,9 @@ func ParseOracle(output string) ([]OraclePair, error) {
 		if in == "" || exp == "" {
 			continue
 		}
+		// 系统结果在原文里以 <br> 收尾 (= 精确比对含末尾换行); Trim 剥掉了它,
+		// 查表输出须补回, 否则差一个 \n 就判 ERROR (09-20 DC01PE21 实测)
+		exp += "\n"
 		pairs = append(pairs, OraclePair{Input: in, Expected: exp})
 	}
 	if len(pairs) == 0 {
@@ -77,13 +89,24 @@ func ParseOracle(output string) ([]OraclePair, error) {
 	return pairs, nil
 }
 
-// splitOracleBlocks 切组: 优先按「第N组」行切, 退化按判题标记行切,
-// 都不行就整块当一组 (单组题)。
+// splitOracleBlocks 切组: 判题标记行是组块的终结符 (每组一次 runGroup 调用,
+// 各带一个标记), 按标记切段; 没有标记再按「第N组」行切; 都不行整块当一组。
 func splitOracleBlocks(out string) []string {
-	if locs := reGroupHead.FindAllStringIndex(out, -1); len(locs) >= 2 {
-		return cutBy(locs, out)
+	if locs := reGroupMarker.FindAllStringIndex(out, -1); len(locs) >= 1 {
+		var blocks []string
+		start := 0
+		for _, l := range locs {
+			if l[0] > start {
+				blocks = append(blocks, out[start:l[0]])
+			}
+			start = l[1]
+		}
+		if start < len(out) {
+			blocks = append(blocks, out[start:])
+		}
+		return blocks
 	}
-	if locs := reGroupMarker.FindAllStringIndex(out, -1); len(locs) >= 2 {
+	if locs := reGroupHead.FindAllStringIndex(out, -1); len(locs) >= 2 {
 		return cutBy(locs, out)
 	}
 	return []string{out}
@@ -135,29 +158,27 @@ func sectionAfter(block string, label *regexp.Regexp, stopA, stopB *regexp.Regex
 
 // ---------- round-2 代码生成 ----------
 
+// 生成代码的预处理段: 不截留、不读 stdin —— 判题器按 needInput 握手逐行喂输入,
+// 任何抢读都会把程序挂死 (09-20 实测)。查表靠调用序号 (见 anvLookupBody)。
 const anvPrelude = `/* anv round-2 lookup (auto-generated) */
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-
-static char anv_in[1 << 20];
-static int anv_len;
-
-static void anv_norm(const char *src, char *dst, int cap) {
-    int i = 0, j = 0;
-    for (; src[i] && j < cap - 1; i++) {
-        char c = src[i];
-        if (c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\f' || c == '\v') continue;
-        dst[j++] = c;
-    }
-    dst[j] = 0;
-}
-
-__attribute__((constructor)) static void anv_sniff(void) {
-    anv_len = (int)fread(anv_in, 1, sizeof(anv_in) - 1, stdin);
-    anv_in[anv_len] = 0;
-}
 `
+
+// emitTable 生成正确输出值表 (按组顺序)。
+func emitTable(pairs []OraclePair) string {
+	var b strings.Builder
+	b.WriteString("static const char *anv_vals[] = {")
+	for i, p := range pairs {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString("\n    ")
+		b.WriteString(cLiteral(p.Expected))
+	}
+	b.WriteString("\n};\n")
+	return b.String()
+}
 
 // cLiteral 把任意字节串编码成 C 字符串字面量 (可打印字符直出, 其余八进制转义)。
 func cLiteral(s string) string {
@@ -186,51 +207,16 @@ func cLiteral(s string) string {
 	return b.String()
 }
 
-// emitTable 生成归一化输入键表 + 原文正确输出值表。
-func emitTable(pairs []OraclePair) string {
-	var b strings.Builder
-	b.WriteString("static const char *anv_keys[] = {")
-	for i, p := range pairs {
-		if i > 0 {
-			b.WriteString(", ")
-		}
-		b.WriteString("\n    ")
-		b.WriteString(cLiteral(normalizeKey(p.Input)))
-	}
-	b.WriteString("\n};\nstatic const char *anv_vals[] = {")
-	for i, p := range pairs {
-		if i > 0 {
-			b.WriteString(", ")
-		}
-		b.WriteString("\n    ")
-		b.WriteString(cLiteral(p.Expected))
-	}
-	b.WriteString("\n};\n")
-	return b.String()
-}
-
-func normalizeKey(s string) string {
-	var b strings.Builder
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch c {
-		case ' ', '\t', '\r', '\n', '\f', '\v':
-		default:
-			b.WriteByte(c)
-		}
-	}
-	return b.String()
-}
-
+// anvLookupBody 函数体: 第 k 次调用打印第 k 组的正确输出并退出。
+// 每组一次程序执行、顺序判组 (order=N), 调用序即组序; 不读 stdin 就没有
+// needInput 握手可卡, 命中即 exit(0), 次数耗尽走原函数体兜底。
 const anvLookupBody = `{
-    static char anv_n[1 << 20];
-    anv_norm(anv_in, anv_n, sizeof(anv_n));
-    for (int i = 0; i < (int)(sizeof(anv_keys) / sizeof(anv_keys[0])); i++) {
-        if (strcmp(anv_n, anv_keys[i]) == 0) {
-            fputs(anv_vals[i], stdout);
-            fflush(stdout);
-            exit(0);
-        }
+    static int anv_k = 0;
+    int anv_n = (int)(sizeof(anv_vals) / sizeof(anv_vals[0]));
+    if (anv_k < anv_n) {
+        fputs(anv_vals[anv_k++], stdout);
+        fflush(stdout);
+        exit(0);
     }
 `
 
@@ -271,7 +257,9 @@ func findTargetFunc(tpl string) (*funcDecl, error) {
 	return nil, errors.New("模板里没有可补全的函数")
 }
 
-var reFuncHead = regexp.MustCompile(`(?m)^\s*[A-Za-z_][\w\s\*,&<>:]*?[\s\*]([A-Za-z_]\w*)\s*\(([^;{})]*)\)\s*\{`)
+// reFuncHead 顶层函数头: 签名与 '{' 之间允许任意行/块注释
+// (真实模板形如 "int f(...)\n/* 返回最高成绩 */\n{  // Add your code here")。
+var reFuncHead = regexp.MustCompile(`(?m)^\s*[A-Za-z_][\w\s\*,&<>:]*?[\s\*]([A-Za-z_]\w*)\s*\(([^;{})]*)\)\s*(?:(?://[^\n]*|/\*[^*]*\*+(?:[^*/][^*]*\*+)*/)\s*)*\{`)
 
 // scanFuncDecls 粗扫顶层函数定义 (不处理字符串里的花括号这类边角; 教材模板
 // 足够规整, 空桩优先策略对扫描噪声不敏感)。正则匹配以 '{' 结尾, '{' 下标 =
@@ -360,7 +348,9 @@ func GenerateLookup(tpl string, pairs []OraclePair) (string, error) {
 	table := emitTable(pairs)
 
 	target, findErr := findTargetFunc(tpl)
-	if findErr == nil && target.BodyIsStub {
+	if findErr == nil {
+		// 函数补全题 (平台会附加自己的 main, 学生代码绝不能带 main):
+		// 函数体是不是空桩无所谓, 查表命中即 exit(0), 原体仅作次数耗尽退路
 		var b strings.Builder
 		b.WriteString(tpl[:target.HeadStart])
 		b.WriteString(anvPrelude)
@@ -374,7 +364,7 @@ func GenerateLookup(tpl string, pairs []OraclePair) (string, error) {
 		return b.String(), nil
 	}
 
-	// 整程题: 模板没空桩 (只有 main 或有实际实现的辅助函数), 换成独立查表程序
+	// 整程题: 模板没有可补全的函数, 换成独立查表程序
 	// (anvLookupBody 自带函数体花括号, 尾部 } 收的是 for 循环)
 	return "/* anv round-2 whole-program lookup */\n" + anvPrelude + "\n" + table + "int main(void) " + anvLookupBody + "    return 0;\n}\n", nil
 }
@@ -578,6 +568,10 @@ func (r *run) judge(q *CatalogItem, qfn string, meta *QuestionMeta) (bool, error
 		rd, err := r.client.RunGroup(r.ctx, q.EID, "", qfn, meta.Kind, meta.Language)
 		if err != nil {
 			return false, fmt.Errorf("round-2 判题请求失败 (第 %d 调): %w", i+1, err)
+		}
+		if i == 0 {
+			r.logf("  ↳ 判题首调: end=%v order=%d passed=%v right=%d err=%d needInput=%v out=%q",
+				rd.End, rd.Order, rd.Passed, rd.RunRightCount, rd.RunErrCount, rd.NeedInput, truncate(rd.Output, 80))
 		}
 		if rd.End {
 			return rd.Passed, nil

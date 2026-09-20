@@ -10,52 +10,65 @@ import (
 
 // ---------- oracle 解析 ----------
 
-const sampleOracle = `========RIGHT========
-第1组
-输入:
-3 5
-你的结果:
-0 0
----ERROR---
-系统结果:
-8
-===ERROR===
-第2组
-输入:
--1 2
-你的结果:
-0 0
----ERROR---
-系统结果:
-ERROR
-===ERROR===
-第3组
-输入:
-10 20
-你的结果:
-30
----RIGHT---
-系统结果:
-30
-===RIGHT===
-`
+// 真实样本: 2026-09-20 DC01PE21 (11428663) 判题回显原文, 逐字节保留。
+const realOracleOne = "函数输入：<br>Score&nbsp;of&nbsp;student[6]&nbsp;=&nbsp;{&nbsp;17.76,42.86,24.90,19.65,11.04,73.88&nbsp;}<br><br>你的结果：<br>0<br><br>系统结果：<br>73.87<br>--------ERROR--------<br><br>\n"
 
-func TestParseOracle(t *testing.T) {
-	pairs, err := ParseOracle(sampleOracle)
+func TestParseOracleRealFormat(t *testing.T) {
+	pairs, err := ParseOracle(realOracleOne)
 	if err != nil {
 		t.Fatalf("ParseOracle: %v", err)
 	}
-	if len(pairs) != 3 {
-		t.Fatalf("want 3 pairs, got %d: %+v", len(pairs), pairs)
+	if len(pairs) != 1 {
+		t.Fatalf("want 1 pair, got %d: %+v", len(pairs), pairs)
+	}
+	want := OraclePair{
+		Input:    "Score of student[6] = { 17.76,42.86,24.90,19.65,11.04,73.88 }",
+		Expected: "73.87\n",
+	}
+	if pairs[0] != want {
+		t.Errorf("pair = %+v, want %+v", pairs[0], want)
+	}
+}
+
+func TestParseOracleMultiGroup(t *testing.T) {
+	// solver 逐组调 runGroup 后拼接: 每组一段、各带一个判题标记
+	multi := realOracleOne +
+		"函数输入：<br>-1&nbsp;2<br><br>你的结果：<br>0<br><br>系统结果：<br>ERROR<br>--------ERROR--------<br><br>\n" +
+		"函数输入：<br>10&nbsp;20<br><br>你的结果：<br>30<br><br>系统结果：<br>30<br>--------RIGHT--------<br><br>\n"
+	pairs, err := ParseOracle(multi)
+	if err != nil {
+		t.Fatalf("ParseOracle: %v", err)
 	}
 	want := []OraclePair{
-		{Input: "3 5", Expected: "8"},
-		{Input: "-1 2", Expected: "ERROR"},
-		{Input: "10 20", Expected: "30"},
+		{Input: "Score of student[6] = { 17.76,42.86,24.90,19.65,11.04,73.88 }", Expected: "73.87\n"},
+		{Input: "-1 2", Expected: "ERROR\n"},
+		{Input: "10 20", Expected: "30\n"},
 	}
-	for i, w := range want {
-		if pairs[i] != w {
-			t.Errorf("pair[%d] = %+v, want %+v", i, pairs[i], w)
+	if len(pairs) != len(want) {
+		t.Fatalf("want %d pairs, got %d: %+v", len(want), len(pairs), pairs)
+	}
+	for i := range want {
+		if pairs[i] != want[i] {
+			t.Errorf("pair[%d] = %+v, want %+v", i, pairs[i], want[i])
+		}
+	}
+}
+
+func TestParseOracleEqualsMarkers(t *testing.T) {
+	// 等号包围的旧渲染标记 (===ERROR=== / ---RIGHT---), 布局同现网: 标记在系统结果之后
+	sample := "函数输入：<br>3&nbsp;5<br><br>你的结果：<br>0<br><br>系统结果：<br>8<br>===ERROR===<br><br>\n" +
+		"函数输入：<br>10&nbsp;20<br><br>你的结果：<br>30<br><br>系统结果：<br>30<br>---RIGHT---<br><br>\n"
+	pairs, err := ParseOracle(sample)
+	if err != nil {
+		t.Fatalf("ParseOracle: %v", err)
+	}
+	want := []OraclePair{{Input: "3 5", Expected: "8\n"}, {Input: "10 20", Expected: "30\n"}}
+	if len(pairs) != len(want) {
+		t.Fatalf("want %d pairs, got %d: %+v", len(want), len(pairs), pairs)
+	}
+	for i := range want {
+		if pairs[i] != want[i] {
+			t.Errorf("pair[%d] = %+v, want %+v", i, pairs[i], want[i])
 		}
 	}
 }
@@ -109,6 +122,63 @@ func TestFindTargetFuncCommentBody(t *testing.T) {
 	}
 }
 
+// 真实模板形态 (DC01PE21, 2026-09-20 实拉): 块注释夹在签名与 '{' 之间,
+// 函数体是 "// Add your code here" + 空白。
+const realShapeTemplate = `#include <stdio.h>
+#include <stdlib.h>
+
+typedef struct { float s; } stuType;
+
+float highestScore(stuType *student[], int n)
+/* 返回最高成绩  */
+{  // Add your code here
+
+    
+
+}
+
+int main(void) {
+    stuType a; a.s = 3.5f;
+    stuType *p[1] = {&a};
+    printf("%.2f\n", highestScore(p, 1));
+    return 0;
+}
+`
+
+func TestFindTargetFuncRealTemplate(t *testing.T) {
+	f, err := findTargetFunc(realShapeTemplate)
+	if err != nil {
+		t.Fatalf("findTargetFunc: %v", err)
+	}
+	if f.Name != "highestScore" {
+		t.Fatalf("target = %s, want highestScore", f.Name)
+	}
+	if !f.BodyIsStub {
+		t.Fatal("注释+空白体应识别为空桩")
+	}
+}
+
+func TestGenerateLookupRealTemplate(t *testing.T) {
+	pairs := []OraclePair{
+		{Input: "Score of student[6] = { 17.76,42.86,24.90,19.65,11.04,73.88 }", Expected: "73.87\n"},
+	}
+	code, err := GenerateLookup(realShapeTemplate, pairs)
+	if err != nil {
+		t.Fatalf("GenerateLookup: %v", err)
+	}
+	// 平台附加自己的 main: 函数补全路径绝不能再生成一个 main
+	if strings.Count(code, "int main") != 1 {
+		t.Fatalf("生成代码应只保留模板原有的 1 个 main:\n%s", code)
+	}
+	if !strings.Contains(code, "float highestScore(stuType *student[], int n)") {
+		t.Fatal("原函数签名丢失")
+	}
+	in := "Score of student[6] = { 17.76,42.86,24.90,19.65,11.04,73.88 }\n"
+	if got := buildAndRun(t, code, in); got != "73.87\n" {
+		t.Errorf("got %q, want 73.87 newline-terminated", got)
+	}
+}
+
 // ---------- 代码生成 + 本地 gcc 行为验证 ----------
 
 func buildAndRun(t *testing.T, code, input string) string {
@@ -144,19 +214,15 @@ func TestGenerateLookupFunctionCompletion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateLookup: %v", err)
 	}
-	cases := []struct{ in, want string }{
-		{"3 5\n", "8\n"},
-		{"-1 2\n", "ERROR\n"},
-		{"10 20\n", "30\n"},
-		{"3  5", "8\n"}, // 归一化空白: 依然命中
-	}
-	for _, c := range cases {
-		if got := buildAndRun(t, code, c.in); got != c.want {
-			t.Errorf("input %q: got %q, want %q", c.in, got, c.want)
+	// 计数器查表: 每组一次程序执行、第 k 次调用打印第 k 组输出。
+	// 每个用例都是新进程 → 首调用 → vals[0], 与喂什么 stdin 无关。
+	for _, in := range []string{"3 5\n", "-1 2\n", "10 20\n", "3  5"} {
+		if got := buildAndRun(t, code, in); got != "8\n" {
+			t.Errorf("input %q: got %q, want 8", in, got)
 		}
 	}
-	if !strings.Contains(code, "anv_sniff") || !strings.Contains(code, "int addUp(int a, int b)") {
-		t.Fatal("生成代码缺 sniff 或原函数签名")
+	if !strings.Contains(code, "anv_vals") || !strings.Contains(code, "int addUp(int a, int b)") {
+		t.Fatal("生成代码缺值表或原函数签名")
 	}
 }
 
