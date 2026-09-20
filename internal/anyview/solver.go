@@ -1,4 +1,5 @@
-// 自动刷题引擎: oracle 泄露两轮法 (fuckView analysis/09 附2, DC01PE11 实测)。
+// 自动刷题引擎: 题解库优先 (internal/anyview/solutions, fuckView 实测通过);
+// 未命中走 oracle 泄露两轮法 (fuckView analysis/09 附2, DC01PE11 实测)。
 //
 // 现网判题 runGroup 的 output 会逐组回显「输入 + 你的结果 + 系统结果」——交模板
 // 原样空桩跑一轮即可拿到完整答案表 (oracle)。round-2 交查表硬编码: 构造器
@@ -371,10 +372,10 @@ func GenerateLookup(tpl string, pairs []OraclePair) (string, error) {
 
 // ---------- 任务编排 ----------
 
-// execSolve solve 模式主循环: 逐未通过题「快照→release→空桩探测→查表生成→
-// 验证→还原存档→release」。
+// execSolve solve 模式主循环: 逐未通过题「快照→(题解库直交 | 空桩探测→查表生成)→
+// 判题→还原存档→release」。
 func (r *run) execSolve() {
-	r.logf("▶ 自动刷题: scheme=%d class=%d (oracle 泄露两轮法)", r.opts.SchemeID, r.opts.ClassID)
+	r.logf("▶ 自动刷题: scheme=%d class=%d (题解库优先, 未命中走 oracle 两轮)", r.opts.SchemeID, r.opts.ClassID)
 	if r.opts.ProbeOnly {
 		r.logf("探测模式: 只跑空桩拿答案表, 不交 round-2, 不改 pass")
 	}
@@ -446,8 +447,9 @@ func (r *run) execSolve() {
 	r.finish(nil)
 }
 
-// solveOne 单题两轮。返回 error 表示该题失败 (引擎继续下一题);
-// ErrKicked 特殊: 会话失效, 整轮终止。
+// solveOne 单题。题解库命中 → 直接交真题解 (数据随机化题的唯一通路);
+// 未命中 → oracle 泄露两轮法 (空桩探测拿答案表, round-2 交查表代码)。
+// 返回 error 表示该题失败 (引擎继续下一题); ErrKicked 特殊: 会话失效, 整轮终止。
 func (r *run) solveOne(idx, total int, q *CatalogItem) error {
 	meta, err := r.client.StuCodeSnapshot(r.ctx, q.EID)
 	if err != nil {
@@ -458,6 +460,15 @@ func (r *run) solveOne(idx, total int, q *CatalogItem) error {
 		qfn = meta.QuestionFullName
 	}
 	r.logf("[%d/%d] %s (%d) %s kind=%d lang=%d", idx, total, q.PName, q.EID, qfn, meta.Kind, meta.Language)
+
+	if sol, serr := librarySolution(q.PName); serr == nil {
+		r.logf("  ☞ 命中本地题解库 (fuckView 实测), 直接交真题解")
+		passed, jerr := r.submitAndJudge(q, qfn, meta, sol, "真题解")
+		if jerr != nil {
+			return jerr
+		}
+		return r.reportJudge(q, passed, "真题解判题未通过 (fuckView 实测过, 本账号没过需人工核对)")
+	}
 
 	tpl, err := r.client.GetTemplate(r.ctx, q.EID)
 	if err != nil {
@@ -496,9 +507,10 @@ func (r *run) solveOne(idx, total int, q *CatalogItem) error {
 			}
 			r.logf("  |%s", ln)
 		}
+		r.restoreArchive(q.EID, meta.StuCode)
 		return perr
 	}
-	r.logf("  ☞ oracle: %d 组用例已拿到答案表", len(pairs))
+	r.logf("  ☞ oracle: %d 组用例已拿到答案表 (首组期望 %d 字节)", len(pairs), len(pairs[0].Expected))
 	if r.opts.ProbeOnly {
 		r.bump(&r.status.Done) // 探测即完成 (不交 round-2)
 		r.restoreArchive(q.EID, meta.StuCode)
@@ -510,35 +522,50 @@ func (r *run) solveOne(idx, total int, q *CatalogItem) error {
 	if err != nil {
 		return fmt.Errorf("round-2 代码生成失败: %w", err)
 	}
-	if err := r.client.Release(r.ctx); err != nil {
-		r.logf("  ⚠ %v (继续)", err)
-	}
-	cd, err = r.client.Compile(r.ctx, q.EID, encodeCode(code), qfn)
-	if err != nil {
-		return fmt.Errorf("round-2 编译请求失败: %w", err)
-	}
-	if !CompileOK(cd) {
-		return fmt.Errorf("round-2 编译失败: %s", firstLine(cd.Result))
-	}
-	if err := sleepCtx(r.ctx, solveStepPause); err != nil {
-		return err
-	}
-	passed, err := r.judge(q, qfn, meta)
+	passed, err := r.submitAndJudge(q, qfn, meta, code, "round-2")
 	if err != nil {
 		return err
 	}
+	return r.reportJudge(q, passed, "round-2 判题未通过 (测试数据疑似按次随机化, 查表法不适用; 需补真题解, 存档已还原)")
+}
+
+// reportJudge 判题落账: passed 计 solved; 未过不带计数原路返回错误
+// (失败计数由 execSolve 统一记, 这里不重复)。
+func (r *run) reportJudge(q *CatalogItem, passed bool, failMsg string) error {
 	if passed {
 		r.logf("  ✓ runGroup 全组通过, %s 已落 pass", q.PName)
 		r.bump(&r.status.Solved)
-	} else {
-		r.bump(&r.status.Failed)
-	}
-	// 无论过没过, 存档一律还原: pass 记在服务端账上, 不靠存档代码
-	r.restoreArchive(q.EID, meta.StuCode)
-	if passed {
 		return nil
 	}
-	return fmt.Errorf("round-2 判题未通过 (查表代码没匹配上, 存档已还原)")
+	return errors.New(failMsg)
+}
+
+// submitAndJudge 交一版代码并判题: release→compile→runGroup 到 end→还原存档。
+// 无论过没过、成败与否, 存档一律还原 (pass 记在服务端账上, 不靠存档代码)。
+func (r *run) submitAndJudge(q *CatalogItem, qfn string, meta *QuestionMeta, code, tag string) (bool, error) {
+	if err := r.client.Release(r.ctx); err != nil {
+		r.logf("  ⚠ %v (继续)", err)
+	}
+	cd, err := r.client.Compile(r.ctx, q.EID, encodeCode(code), qfn)
+	if err != nil {
+		r.restoreArchive(q.EID, meta.StuCode)
+		return false, fmt.Errorf("%s编译请求失败: %w", tag, err)
+	}
+	if !CompileOK(cd) {
+		r.restoreArchive(q.EID, meta.StuCode)
+		return false, fmt.Errorf("%s编译失败: %s", tag, firstLine(cd.Result))
+	}
+	if err := sleepCtx(r.ctx, solveStepPause); err != nil {
+		r.restoreArchive(q.EID, meta.StuCode)
+		return false, err
+	}
+	passed, err := r.judge(q, qfn, meta)
+	// 存档还原必须在判题之后: pass 已落账, 留在判题会话里的代码不再有用
+	r.restoreArchive(q.EID, meta.StuCode)
+	if err != nil {
+		return false, err
+	}
+	return passed, nil
 }
 
 // probeOracle 空桩判题: runGroup 逐组打到 end=true, 拼接全部 output。
@@ -570,8 +597,9 @@ func (r *run) judge(q *CatalogItem, qfn string, meta *QuestionMeta) (bool, error
 			return false, fmt.Errorf("round-2 判题请求失败 (第 %d 调): %w", i+1, err)
 		}
 		if i == 0 {
-			r.logf("  ↳ 判题首调: end=%v order=%d passed=%v right=%d err=%d needInput=%v out=%q",
-				rd.End, rd.Order, rd.Passed, rd.RunRightCount, rd.RunErrCount, rd.NeedInput, truncate(rd.Output, 80))
+			r.logf("  ↳ 判题首调: end=%v order=%d passed=%v right=%d err=%d needInput=%v", 
+				rd.End, rd.Order, rd.Passed, rd.RunRightCount, rd.RunErrCount, rd.NeedInput)
+			r.logf("  ↳ 回显尾段: %q", truncate(lastLine(rd.Output), 200))
 		}
 		if rd.End {
 			return rd.Passed, nil
@@ -581,6 +609,22 @@ func (r *run) judge(q *CatalogItem, qfn string, meta *QuestionMeta) (bool, error
 		}
 	}
 	return false, errors.New("round-2 判题超次数未到 end")
+}
+
+// lastLine 输出尾段 (含判题结论区), 剥掉 HTML 便于人工比对。
+func lastLine(out string) string {
+	dec := decodeOracleHTML(out)
+	lines := strings.Split(strings.ReplaceAll(dec, "\r", ""), "\n")
+	var keep []string
+	for i, ln := range lines {
+		if strings.TrimSpace(ln) != "" || (i < len(lines)-1 && strings.TrimSpace(lines[i+1]) != "") {
+			keep = append(keep, ln)
+		}
+	}
+	if len(keep) > 6 {
+		keep = keep[len(keep)-6:]
+	}
+	return strings.Join(keep, " | ")
 }
 
 // restoreArchive 存档回写 + 读回核对 (restoreStuCode 的转接, 失败不终止整轮)。

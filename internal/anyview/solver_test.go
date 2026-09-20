@@ -250,3 +250,30 @@ func TestCLiteralEscaping(t *testing.T) {
 		t.Errorf("cLiteral = %s", got)
 	}
 }
+
+// ---------- 题解库 ----------
+
+func TestLibrarySolution(t *testing.T) {
+	for _, pname := range []string{"DC01PE06", "第1章-DC01PE08", "dc01pe65", "DC01PE21", "DC01PE03e"} {
+		sol, err := librarySolution(pname)
+		if err != nil {
+			t.Fatalf("%s: %v", pname, err)
+		}
+		if !strings.HasPrefix(sol, `#include "allinclude.h"`) {
+			t.Errorf("%s: 题解形状不对: %.40q", pname, sol)
+		}
+	}
+	// 函数补全题的题解绝不能带 main (平台会附加); 整程 e 题必须自带
+	if sol, err := librarySolution("DC01PE21"); err != nil || strings.Contains(sol, "int main") {
+		t.Errorf("PE21 题解应无 main: err=%v", err)
+	}
+	if sol, err := librarySolution("DC01PE03e"); err != nil || !strings.Contains(sol, "int main") {
+		t.Errorf("整程 e 题题解应自带 main: err=%v", err)
+	}
+	if _, err := librarySolution("DC06PE23"); err == nil {
+		t.Error("DC06PE23 实测未过, 不应命中题解库")
+	}
+	if _, err := librarySolution("综合实验一"); err == nil {
+		t.Error("无题号题名不应命中")
+	}
+}
