@@ -1,6 +1,8 @@
-/* status-lite 设计语言: MD3 teal 种子配色 + Element Plus 变量映射。
-   Element 的组件观感全部走 --el-* 变量, 这里把 teal MD3 色板灌进去,
-   浅/深两套与 html.dark (Element 约定) 同步切换。 */
+/* status-lite 品牌令牌 (MD3 teal) → Element Plus 变量映射。
+   组件观感一律走 Element 原生组件, 这里只做三件事:
+   1. 灌色板 (浅/深两套, html.dark 与 Element 暗色约定同步)
+   2. 成文圆角规则: 按钮/标签全圆角(MD3 pill), 输入类 8px, 卡片 12px
+   3. 极少量布局工具类 (顶栏/容器), 不自绘任何组件 */
 :root {
   /* ---- MD3 tokens (light) ---- */
   --md-primary: #00696b;
@@ -10,11 +12,7 @@
   --md-secondary-container: #cce8e8;
   --md-on-secondary-container: #051f20;
   --md-error: #ba1a1a;
-  --md-error-container: #ffdad6;
-  --md-on-error-container: #410002;
   --md-warn: #7c5800;
-  --md-warn-container: #ffdfaa;
-  --md-on-warn-container: #261a00;
   --md-surface: #f4faf9;
   --md-on-surface: #161d1d;
   --md-on-surface-variant: #3f4949;
@@ -73,7 +71,7 @@
   --el-border-color-lighter: var(--md-outline-variant);
   --el-border-color-extra-light: var(--md-surface-highest);
   --el-font-family: system-ui, Roboto, "Noto Sans SC", "PingFang SC", sans-serif;
-  --el-border-radius-base: 10px;
+  --el-border-radius-base: 8px;
   --el-border-radius-round: 9999px;
 }
 html.dark {
@@ -85,11 +83,7 @@ html.dark {
   --md-secondary-container: #324b4d;
   --md-on-secondary-container: #cce8e8;
   --md-error: #ffb4ab;
-  --md-error-container: #93000a;
-  --md-on-error-container: #ffdad6;
   --md-warn: #ffb951;
-  --md-warn-container: #573f00;
-  --md-on-warn-container: #ffdfaa;
   --md-surface: #0e1415;
   --md-on-surface: #dde4e3;
   --md-on-surface-variant: #bec8c7;
@@ -100,31 +94,37 @@ html.dark {
   --md-outline: #889292;
   --md-outline-variant: #3f4949;
 
+  /* 基色必须在 html.dark 里重新钉住, 否则 Element 暗色表 (同名选择器) 会盖回默认绿/橙 */
   --el-color-primary: var(--md-primary);
-  --el-color-primary-light-3: #82e5e6;
-  --el-color-primary-light-5: #a6eded;
-  --el-color-primary-light-7: #c9f3f4;
-  --el-color-primary-light-8: #dcf8f8;
-  --el-color-primary-light-9: #eefbfb;
-  --el-color-primary-dark-2: #3daeb0;
-  --el-color-success-light-3: #82e5e6;
-  --el-color-success-light-5: #a6eded;
-  --el-color-success-light-7: #c9f3f4;
-  --el-color-success-light-8: #dcf8f8;
-  --el-color-success-light-9: #eefbfb;
-  --el-color-success-dark-2: #3daeb0;
-  --el-color-warning-light-3: #fcc98a;
-  --el-color-warning-light-5: #fdd8ab;
-  --el-color-warning-light-7: #fee8cb;
-  --el-color-warning-light-8: #fef0dd;
-  --el-color-warning-light-9: #fef7ee;
-  --el-color-warning-dark-2: #e0a544;
-  --el-color-danger-light-3: #fcc4bf;
-  --el-color-danger-light-5: #fed4d0;
-  --el-color-danger-light-7: #fee5e2;
-  --el-color-danger-light-8: #ffedeb;
-  --el-color-danger-light-9: #fff6f5;
-  --el-color-danger-dark-2: #e0a09a;
+  --el-color-success: var(--md-primary);
+  --el-color-warning: var(--md-warn);
+  --el-color-danger: var(--md-error);
+  --el-color-error: var(--md-error);
+  /* 暗色 light-N 渐变向深底混合 (EP 约定), 不是向白 */
+  --el-color-primary-light-3: #3c9f9f;
+  --el-color-primary-light-5: #307878;
+  --el-color-primary-light-7: #254f50;
+  --el-color-primary-light-8: #1d3c3c;
+  --el-color-primary-light-9: #182828;
+  --el-color-primary-dark-2: #52e2e3;
+  --el-color-success-light-3: #3c9f9f;
+  --el-color-success-light-5: #307878;
+  --el-color-success-light-7: #254f50;
+  --el-color-success-light-8: #1d3c3c;
+  --el-color-success-light-9: #182828;
+  --el-color-success-dark-2: #52e2e3;
+  --el-color-warning-light-3: #b98840;
+  --el-color-warning-light-5: #8a6733;
+  --el-color-warning-light-7: #5b4626;
+  --el-color-warning-light-8: #433421;
+  --el-color-warning-light-9: #2c2322;
+  --el-color-warning-dark-2: #f4c96a;
+  --el-color-danger-light-3: #b98480;
+  --el-color-danger-light-5: #8a6460;
+  --el-color-danger-light-7: #5a4441;
+  --el-color-danger-light-8: #433230;
+  --el-color-danger-light-9: #2c201d;
+  --el-color-danger-dark-2: #f4c4bd;
   --el-bg-color: var(--md-surface);
   --el-bg-color-overlay: var(--md-surface-low);
   --el-fill-color-blank: var(--md-surface);
@@ -147,53 +147,35 @@ body {
   line-height: 1.5;
 }
 
-/* ---- 卡片 = status-lite 的 surface-container-low 圆角卡, 无阴影无描边 ---- */
+/* ---- 卡片: 扁平 surface-low 圆角卡, 无阴影无描边 ---- */
 .el-card {
   --el-card-border-color: transparent;
   --el-card-border-radius: var(--md-radius);
   --el-card-bg-color: var(--md-surface-low);
-  --el-card-padding: 18px 20px;
+  --el-card-padding: 20px 24px;
   box-shadow: none !important;
-  animation: card-in 0.4s var(--md-motion) backwards;
+  animation: card-in 0.35s var(--md-motion) backwards;
 }
-@keyframes card-in { from { opacity: 0; transform: translateY(8px); } }
+@keyframes card-in { from { opacity: 0; transform: translateY(6px); } }
+
+/* 卡片头: 标题 + 右侧操作位, 不放装饰图标 */
 .card-head {
-  display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 10px; margin-bottom: 4px;
 }
 .card-head h2 {
-  margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.4px; flex: 1;
+  margin: 0; font-size: 15px; font-weight: 600; flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.card-icon { color: var(--md-primary); display: grid; place-items: center; }
-.card-icon .el-icon { width: 20px; height: 20px; font-size: 20px; }
-.card-sub { margin: -6px 0 14px; font-size: 13px; color: var(--md-on-surface-variant); }
+.card-sub { margin: 4px 0 0; font-size: 13px; color: var(--md-on-surface-variant); }
 
-/* ---- 大号指标 (tabular-nums) ---- */
-.metric-big { display: flex; align-items: baseline; gap: 6px; margin: 2px 0 10px; }
-.metric-big .num {
-  font-size: 44px; font-weight: 400; line-height: 1.1; font-variant-numeric: tabular-nums;
+/* 卡片底部操作区: 按钮有归属, 右对齐 */
+.card-foot {
+  display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+  margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--md-outline-variant);
 }
-.metric-big .unit { font-size: 18px; color: var(--md-on-surface-variant); }
-.substats { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 12px; }
-.substats .stat .lbl { font-size: 12px; color: var(--md-on-surface-variant); }
-.substats .stat .val { font-weight: 500; font-variant-numeric: tabular-nums; }
 
-/* ---- MD3 进度条 (分段栈) ---- */
-.bar-track {
-  height: 8px; border-radius: 9999px;
-  background: var(--md-surface-highest);
-  overflow: hidden; margin: 6px 0; display: flex;
-}
-.bar-fill {
-  height: 100%; width: 0;
-  background: var(--md-primary);
-  transition: width 0.5s var(--md-motion), background 0.3s;
-}
-.bar-fill.muted { background: var(--md-outline); }
-.bar-fill.err { background: var(--md-error); }
-.bar-caption {
-  display: flex; justify-content: space-between;
-  font-size: 12px; color: var(--md-on-surface-variant); font-variant-numeric: tabular-nums;
-}
+/* 数字统一等宽 (指标/时间戳) */
+.tnum { font-variant-numeric: tabular-nums; }
 
 /* ---- 顶栏: 毛玻璃 + 发丝线 ---- */
 .appbar {
@@ -203,33 +185,51 @@ body {
   border-bottom: 1px solid var(--md-outline-variant);
 }
 .appbar-inner {
-  max-width: 860px; margin: 0 auto; padding: 10px 20px;
+  max-width: 760px; margin: 0 auto; padding: 12px 24px;
   display: flex; align-items: center; gap: 12px;
 }
 .brand { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
-.brand h1 { margin: 0; font-size: 20px; font-weight: 500; letter-spacing: 0.2px; white-space: nowrap; }
-.brand .logo { color: var(--md-primary); }
+.brand h1 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: 0.2px; white-space: nowrap; }
 
-main.container { max-width: 860px; margin: 0 auto; padding: 20px; display: grid; gap: 16px; }
+main.container { max-width: 760px; margin: 0 auto; padding: 24px; display: grid; gap: 16px; }
 
 footer.page {
-  max-width: 860px; margin: 0 auto; padding: 8px 20px 28px;
+  max-width: 760px; margin: 0 auto; padding: 4px 24px 28px;
   color: var(--md-outline); font-size: 12px; text-align: center;
 }
 
-/* ---- 日志终端块 ---- */
-.log-body {
-  padding: 12px; border-radius: 10px;
-  background: var(--md-surface);
-  border: 1px solid var(--md-outline-variant);
-  font-family: ui-monospace, Menlo, Consolas, monospace;
-  font-size: 12px; line-height: 1.6;
-  max-height: 260px; overflow: auto;
-  white-space: pre-wrap; word-break: break-all;
-  margin: 0;
+/* ---- 运行日志 (el-timeline 容器) ---- */
+.log-scroll {
+  max-height: 320px; overflow: auto;
+  margin-top: 12px; padding-left: 4px;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--md-outline-variant) transparent;
+}
+.log-scroll .el-timeline-item {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 44px;
+  padding-bottom: 16px;
+}
+.log-scroll .el-timeline-item__timestamp { font-variant-numeric: tabular-nums; }
+.log-scroll .el-timeline-item__content { word-break: break-word; }
+.log-time {
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+  margin-right: 10px;
 }
 
-/* Element 细节校准 */
+/* el-statistic 尺寸档: 主指标大号, 行内小指标 */
+.stat-hero { --el-statistic-content-font-size: 44px; }
+.stat-sm { --el-statistic-content-font-size: 18px; }
+.stat-row { display: flex; flex-wrap: wrap; gap: 8px 32px; margin-top: 16px; }
+
+/* ---- Element 细节校准 ---- */
 .el-button { --el-button-font-weight: 500; }
 .el-descriptions__body { background: transparent !important; }
-.el-check-tag { font-weight: 500; }
+.el-form-item__label { font-weight: 500; }
+
+@media (prefers-reduced-motion: reduce) {
+  .el-card { animation: none; }
+  * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}

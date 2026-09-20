@@ -16,6 +16,7 @@ const solve = computed(() => (props.status.mode || "idle") === "solve");
 const cur = computed(() => props.status.current || null);
 const min1 = (v) => (Math.round((Number(v) || 0) * 10) / 10).toFixed(1);
 
+// 当前题: 现累计 + 本次实挂 → 距目标点的进度
 const hold = computed(() => {
   const c = cur.value;
   if (!c) return null;
@@ -32,80 +33,91 @@ const total = computed(() => props.status.total || 0);
 const processed = computed(() => (props.status.done || 0) + (props.status.skipped || 0) + (props.status.failed || 0));
 const hasCur = computed(() => props.status.running && !!cur.value);
 const overallPct = computed(() => (total.value > 0 ? Math.min(100, Math.round((processed.value / total.value) * 100)) : 0));
-const remaining = computed(() => (total.value > 0 ? Math.max(0, total.value - processed.value - (hasCur.value ? 1 : 0)) : "—"));
-const segPct = (n) => (total.value > 0 ? (n / total.value) * 100 : 0) + "%";
+const remaining = computed(() => Math.max(0, total.value - processed.value - (hasCur.value ? 1 : 0)));
+const headTitle = computed(() => (cur.value ? cur.value.pname : stopping.value ? "收尾中…" : "准备下一题…"));
 </script>
 
 <template>
   <el-card>
     <div class="card-head">
-      <el-icon class="card-icon"><Loading :class="{ spin: status.running }" /></el-icon>
-      <h2>{{ cur ? cur.pname : (stopping ? "收尾中…" : "准备下一题…") }}</h2>
-      <el-tag type="info" round effect="light">
-        <span style="display:inline-flex;align-items:center;gap:6px;">
-          <span class="chip-dot" />
-          {{ solve ? "自动刷题" : "待机计时中" }}
-        </span>
+      <h2>{{ headTitle }}</h2>
+      <el-tag :type="stopping ? 'warning' : 'success'" effect="light" round>
+        {{ solve ? "自动刷题" : "待机计时" }}
       </el-tag>
     </div>
     <p class="card-sub">
-      {{ cur ? `${cur.chapName || "—"} · EID ${cur.eid || "—"}` : "换题间隙 · 防刷限速保护，随机等待 8~23s" }}
+      {{ cur ? `${cur.chapName || ""} EID ${cur.eid || ""}`.trim() : "换题间隙 · 防刷限速保护, 随机等待 8~23s" }}
     </p>
 
     <template v-if="!solve">
-      <div class="metric-big">
-        <span class="num">{{ hold ? min1(hold.totalMin) : "···" }}</span>
-        <span class="unit">/ {{ hold ? min1(hold.targetMin) : "—" }} 分钟</span>
-      </div>
-      <div class="bar-track">
-        <div class="bar-fill" :style="{ width: (hold ? hold.pct : 0) + '%' }" />
-      </div>
-      <div class="bar-caption">
-        <span v-if="hold">
-          {{ hold.totalMin >= hold.targetMin ? "目标已达成，等待复核" : `还需约 ${min1(hold.targetMin - hold.totalMin)} 分钟` }}
-        </span>
-        <span v-else>等待中…</span>
-        <span v-if="hold">{{ min1(hold.accumMin) }} → {{ min1(hold.totalMin) }} / {{ min1(hold.targetMin) }} 分钟</span>
-      </div>
+      <el-statistic class="stat-hero" :value="hold ? hold.totalMin : 0" :precision="1">
+        <template #suffix>
+          <span class="hero-suffix">/ {{ hold ? min1(hold.targetMin) : "-" }} 分钟</span>
+        </template>
+      </el-statistic>
+      <el-progress
+        :percentage="hold ? Math.round(hold.pct) : 0"
+        :stroke-width="8"
+        :show-text="false"
+        :status="hold && hold.pct >= 100 ? 'success' : ''"
+      />
+      <p class="card-sub">
+        <template v-if="hold">
+          {{ hold.pct >= 100 ? "目标已达成, 等待复核" : `还需约 ${min1(hold.targetMin - hold.totalMin)} 分钟` }}
+          <span class="tnum"> · 累计 {{ min1(hold.accumMin) }} → {{ min1(hold.totalMin) }}</span>
+        </template>
+        <template v-else>等待中…</template>
+      </p>
     </template>
 
     <template v-else>
-      <div class="metric-big">
-        <span class="num">{{ status.solved ?? 0 }}</span>
-        <span class="unit">/ {{ total || "—" }} 题已通过</span>
-      </div>
-      <div class="bar-caption">
-        <span>{{ cur ? (status.probeOnly ? "探测答案表中" : "生成查表代码并判题中") : "间隙等待" }}</span>
-      </div>
+      <el-statistic class="stat-hero" :value="status.solved ?? 0" :precision="0">
+        <template #suffix>
+          <span class="hero-suffix">/ {{ total || "-" }} 题已通过</span>
+        </template>
+      </el-statistic>
+      <p class="card-sub">
+        {{ cur ? (status.probeOnly ? "探测答案表中" : "生成查表代码并判题中") : "间隙等待" }}
+      </p>
     </template>
 
-    <div class="substats">
-      <div class="stat"><div class="lbl">完成</div><div class="val">{{ status.done ?? 0 }}</div></div>
-      <div class="stat"><div class="lbl">跳过</div><div class="val">{{ status.skipped ?? 0 }}</div></div>
-      <div class="stat"><div class="lbl">失败</div><div class="val">{{ status.failed ?? 0 }}</div></div>
-      <div class="stat" v-if="solve"><div class="lbl">通过</div><div class="val">{{ status.solved ?? 0 }}</div></div>
-      <div class="stat" v-if="!solve"><div class="lbl">剩余</div><div class="val">{{ remaining }}</div></div>
-      <div class="stat" v-if="!solve"><div class="lbl">涨幅</div><div class="val">+{{ min1((status.gainedSec || 0) / 60) }} 分</div></div>
-      <div class="stat" v-if="!solve"><div class="lbl">注入</div><div class="val">{{ status.injectedErrors ?? 0 }} 次</div></div>
+    <div class="stat-row">
+      <el-statistic class="stat-sm" title="完成" :value="status.done ?? 0" />
+      <el-statistic class="stat-sm" title="跳过" :value="status.skipped ?? 0" />
+      <el-statistic class="stat-sm" title="失败" :value="status.failed ?? 0" />
+      <el-statistic v-if="solve" class="stat-sm" title="通过" :value="status.solved ?? 0" />
+      <el-statistic v-if="!solve && total > 0" class="stat-sm" title="剩余" :value="remaining" />
+      <el-statistic v-if="!solve" class="stat-sm" title="涨幅 (分)" :value="(status.gainedSec || 0) / 60" :precision="1" />
+      <el-statistic v-if="!solve" class="stat-sm" title="注入" :value="status.injectedErrors ?? 0" />
     </div>
 
-    <div class="bar-track" style="margin-top:14px;">
-      <div class="bar-fill" :style="{ width: segPct(status.done || 0) }" />
-      <div class="bar-fill muted" :style="{ width: segPct(status.skipped || 0) }" />
-      <div class="bar-fill err" :style="{ width: segPct(status.failed || 0) }" />
+    <div class="overall">
+      <el-progress
+        :percentage="overallPct"
+        :stroke-width="8"
+        :show-text="false"
+      />
+      <p class="card-sub overall-cap">
+        <span class="tnum">{{ total > 0 ? `第 ${Math.min(total, processed + (hasCur ? 1 : 0))} / ${total} 题` : `已处理 ${processed} 题` }}</span>
+        <span v-if="total > 0" class="tnum">{{ overallPct }}%</span>
+      </p>
     </div>
-    <div class="bar-caption">
-      <span>{{ total > 0 ? `第 ${Math.min(total, processed + (hasCur ? 1 : 0))} / ${total} 题` : `已处理 ${processed} 题` }}</span>
-      <span v-if="total > 0">{{ overallPct }}%</span>
+
+    <div class="card-foot">
+      <el-tooltip content="当前题挂完即停, 随后安全下线" placement="top">
+        <el-button type="danger" plain round :loading="stopping" @click="emit('stop')">停止</el-button>
+      </el-tooltip>
     </div>
   </el-card>
-
-  <el-button type="warning" plain size="large" round @click="emit('stop')">停止</el-button>
-  <p v-if="stopping" class="card-sub" style="text-align:center;margin:0;">当前题挂完即停并安全下线</p>
 </template>
 
 <style scoped>
-.chip-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-.spin { animation: rotate 1.2s linear infinite; }
-@keyframes rotate { to { transform: rotate(360deg); } }
+.hero-suffix {
+  font-size: 16px;
+  color: var(--md-on-surface-variant);
+  margin-left: 6px;
+  font-weight: 400;
+}
+.overall { margin-top: 18px; }
+.overall-cap { display: flex; justify-content: space-between; margin-top: 6px; }
 </style>

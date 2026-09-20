@@ -29,6 +29,8 @@ const statusFixtures = {
       "09:12:01  ▶ 开始: 区间 [5.0, 10.0] 分钟, scheme=465 class=381",
       "09:12:03  目录 131 题 (截取范围 131 题), 未通过 127 题为目标",
       "09:41:22  [9/127] DC01PE11 (11428542) 第2章 现累计 210s (3.5 分钟) → 挂 5.0 分钟到 8.5 分钟目标点",
+      "09:47:31  ⚠ WS 断开, 重连并续挂剩余 2.1 分钟",
+      "10:02:44  [10/127] DC01PE12 (11428543) 第2章 → 挂 6.5 分钟",
     ],
   },
   "run-solve": {
@@ -39,9 +41,13 @@ const statusFixtures = {
     log: [
       "10:02:11  ▶ 自动刷题: scheme=465 class=381 (oracle 泄露两轮法)",
       "10:02:14  目录 131 题 (截取 131), 未通过且可判题的 127 题为目标",
-      "10:03:40  [7/127] DC01PE07 (11428489) 第1章-DC01PE07 kind=1 lang=1",
-      "10:04:02    ☞ oracle: 6 组用例已拿到答案表",
-      "10:04:30    ✓ runGroup 全组通过, DC01PE07 已落 pass",
+      "10:03:40  [7/127] DC01PE07 (11428489) 第1章 kind=1 lang=1",
+      "10:04:02  ☞ oracle: 6 组用例已拿到答案表",
+      "10:04:30  ✓ runGroup 全组通过, DC01PE07 已落 pass",
+      "10:05:12  [8/127] DC01PE08 (11428490) 第1章 kind=3 lang=1",
+      "10:05:40  ☞ oracle: 判题回显未含答案表, 生成查表失败",
+      "10:05:41  ✗ DC01PE08 两轮未过, 跳过留待人工",
+      "10:06:20  [9/127] DC01PE09 (11428491) 第1章 kind=1 lang=1",
     ],
   },
   "done-idle": {
@@ -62,12 +68,13 @@ const statusFixtures = {
 
 export async function api(path, opts) {
   if (SHOT) {
-    if (path === "/api/status") {
+    const base = path.split("?")[0];
+    if (base === "/api/status") {
       const want = new URLSearchParams(location.search).get("stage") || "login";
       return JSON.parse(JSON.stringify(statusFixtures[want] || statusFixtures.login));
     }
     await new Promise((r) => setTimeout(r, 120));
-    return JSON.parse(JSON.stringify(fixtures[path] ?? {}));
+    return JSON.parse(JSON.stringify(fixtures[base] ?? {}));
   }
   const res = await fetch(path, opts);
   let body = {};

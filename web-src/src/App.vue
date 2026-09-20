@@ -38,6 +38,8 @@ const stateChip = computed(() => {
   return { text: "未登录", type: "info" };
 });
 
+const tokenGone = computed(() => /119|token|失效|未登录|顶掉/i.test(status.value?.error || ""));
+
 async function poll() {
   try {
     const st = await api("/api/status");
@@ -93,15 +95,20 @@ function refreshStatus() {
   <header class="appbar">
     <div class="appbar-inner">
       <div class="brand">
-        <el-icon class="logo" :size="26"><TrendCharts /></el-icon>
         <h1>anyview-idle</h1>
-        <el-tag v-if="who" type="info" round effect="light" title="点击下线并清除本机会话" style="cursor:pointer;" @click="onLogout">{{ who }}</el-tag>
       </div>
-      <el-tag :type="stateChip.type" round effect="light">
-        <span style="display:inline-flex;align-items:center;gap:6px;">
-          <span class="chip-dot" />{{ stateChip.text }}
-        </span>
-      </el-tag>
+      <el-tag :type="stateChip.type" effect="plain" round>{{ stateChip.text }}</el-tag>
+      <el-dropdown v-if="who" trigger="click" @command="onLogout">
+        <el-button text round>
+          {{ who }}
+          <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="logout">下线并清除本机会话</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
       <el-tooltip content="主题: 自动 / 浅色 / 深色" placement="bottom">
         <el-button text circle :icon="themeIcon" aria-label="切换主题" @click="theme.cycle()" />
       </el-tooltip>
@@ -113,11 +120,11 @@ function refreshStatus() {
       v-if="status.error"
       type="error"
       :title="status.error"
-      :closable="true"
       show-icon
+      closable
     >
-      <template v-if="/119|token|失效|未登录|顶掉/i.test(status.error || '')" #default>
-        {{ status.error }}
+      <template v-if="tokenGone" #default>
+        登录态已失效。
         <el-button type="primary" text size="small" @click="onLogout">重新登录</el-button>
       </template>
     </el-alert>
@@ -141,7 +148,3 @@ function refreshStatus() {
 
   <footer class="page">任务结束自动下线让位 · token 失效约 3 小时后自动重登续跑</footer>
 </template>
-
-<style scoped>
-.chip-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-</style>
