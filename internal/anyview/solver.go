@@ -26,8 +26,10 @@ import (
 )
 
 const (
-	solveRunGroupCap = 100 // runGroup 单题最多调用数 (每组一调打到 end=true)
-	solveStepPause   = 2 * time.Second
+	solveRunGroupCap     = 100 // runGroup 单题最多调用数 (每组一调打到 end=true)
+	solveStepPause       = 2 * time.Second
+	solveRetryPause      = 5 * time.Second
+	solveLibraryAttempts = 4 // 题解库直交判败后的重交上限 (上游判题抖动)
 )
 
 // ---------- oracle 解析 ----------
@@ -463,11 +465,26 @@ func (r *run) solveOne(idx, total int, q *CatalogItem) error {
 
 	if sol, serr := librarySolution(q.PName); serr == nil {
 		r.logf("  ☞ 命中本地题解库 (fuckView 实测), 直接交真题解")
-		passed, jerr := r.submitAndJudge(q, qfn, meta, sol, "真题解")
-		if jerr != nil {
-			return jerr
+		// 上游判题有抖动: gdb 驱动判题, 同一份代码两次判的 err 数都会变
+		// (DC07PE15 实测: 首判 err=1 未过, 原样重交 passed=true 落账)。
+		// 判败不记失败, 原样重交, 抖回 passed=true 即停。
+		for attempt := 1; ; attempt++ {
+			passed, jerr := r.submitAndJudge(q, qfn, meta, sol, "真题解")
+			if jerr != nil {
+				return jerr
+			}
+			if passed || attempt >= solveLibraryAttempts {
+				msg := ""
+				if !passed {
+					msg = fmt.Sprintf("真题解 %d 次判题均未通过 (上游判题抖动, 重跑一轮常可过)", solveLibraryAttempts)
+				}
+				return r.reportJudge(q, passed, msg)
+			}
+			r.logf("  ↻ 第 %d 次判题未过 (判题抖动), 原样重交", attempt)
+			if err := sleepCtx(r.ctx, solveRetryPause); err != nil {
+				return err
+			}
 		}
-		return r.reportJudge(q, passed, "真题解判题未通过 (fuckView 实测过, 本账号没过需人工核对)")
 	}
 
 	tpl, err := r.client.GetTemplate(r.ctx, q.EID)
@@ -597,7 +614,7 @@ func (r *run) judge(q *CatalogItem, qfn string, meta *QuestionMeta) (bool, error
 			return false, fmt.Errorf("round-2 判题请求失败 (第 %d 调): %w", i+1, err)
 		}
 		if i == 0 {
-			r.logf("  ↳ 判题首调: end=%v order=%d passed=%v right=%d err=%d needInput=%v", 
+			r.logf("  ↳ 判题首调: end=%v order=%d passed=%v right=%d err=%d needInput=%v",
 				rd.End, rd.Order, rd.Passed, rd.RunRightCount, rd.RunErrCount, rd.NeedInput)
 			r.logf("  ↳ 回显尾段: %q", truncate(lastLine(rd.Output), 200))
 		}

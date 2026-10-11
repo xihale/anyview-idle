@@ -41,6 +41,8 @@ make test                      # go test ./... (含本地 gcc 编译并运行查
 ## 自动刷题语义（solve）
 
 - 只处理**未通过**且 `questionType < 2` 的题（实验/课设走另一套 Lab 接口，本科生 401，跳过）。
+- 上游判题有抖动：gdb 驱动判题，同一份代码两次判的 err 数都不同，甚至一次判败一次判过
+  （DC07PE15 实测）。题解库直交判败不记失败，原样重交最多 4 次，抖回 `passed=true` 即落账。
 - 流程：取题目档案（kind/language/QF）→ 取模板 → `code/release` 清编译目录 →
   空桩 compile + runGroup 收 oracle → 解析 (输入, 正确结果) 对 → 生成查表代码 →
   release → compile + runGroup 验证 → `passed=true` 记通过 → **存档原样还原**（读回核对）。
