@@ -57,7 +57,7 @@ A machine whose whole job is to sit perfectly still: it measures patience, not s
 
 ## Evidence on Hand
 
-- Protocol verified live 2026-09 (RSA login, WS 401 timing pairs, compile/runGroup counters, accumTime behavior) — see analysis docs in the sibling repo `fuckView/analysis/`.
+- Protocol verified live 2026-09 (RSA login, WS 401 timing pairs, compile/runGroup counters, accumTime behavior) — see analysis docs in the sibling repo `fuckView/analysis/` (private, not published).
 - Real end-to-end runs succeeded: holds verified (+27s, +96s, +73s), cmpErrorCount accumulates server-side, archive restored byte-identical every time.
 - No logo, no marketing copy, no imagery exists. Do not fabricate any.
 
