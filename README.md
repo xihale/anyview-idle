@@ -116,3 +116,9 @@ internal/anyview/
 web-src/                 Vue 3 + Element Plus 前端源码 (Vite, teal MD3 主题)
 web/dist/                前端构建产物 (内嵌进二进制)
 ```
+
+## 许可证
+
+以 [GPL-3.0](LICENSE) 发布。Copyright (C) 2026 xihale。
+
+本项目仅供学习研究；请遵守所在学校与平台的使用规定，因使用本工具产生的后果由使用者自负。
